@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "C:\Claude_Mod_Faltas\Faltas_206_2027\faltas_app_v5\faltas_app\lancamentos_model\scraper_fbref.py", line 172, in <module>
+    fixtures_html = fetch(FIXTURES_URL)
+  File "C:\Claude_Mod_Faltas\Faltas_206_2027\faltas_app_v5\faltas_app\lancamentos_model\scraper_fbref.py", line 65, in fetch
+    r.raise_for_status()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\home\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\requests\models.py", line 1167, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://fbref.com/en/comps/9/2025-2026/schedule/2025-2026-Premier-League-Scores-and-Fixtures

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lançamentos — Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; padding: 20px; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; color: #fff; }
+  .sub { font-size: 0.8rem; color: #666; margin-bottom: 20px; }
+  .stats { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px;
+           padding: 14px 20px; min-width: 110px; }
+  .stat .label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: .05em; }
+  .stat .val { font-size: 1.6rem; font-weight: 700; margin-top: 2px; color: #fff; }
+  .stat.green .val { color: #4caf50; }
+  .stat.red .val { color: #f44336; }
+  .stat.roi .val { color: #64b5f6; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  thead th { background: #1a1d27; color: #aaa; font-weight: 600; padding: 10px 8px;
+              text-align: left; border-bottom: 1px solid #2a2d3a; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid #1e2130; transition: background .15s; }
+  tbody tr:hover { background: #1a1d27; }
+  td { padding: 9px 8px; vertical-align: middle; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.equipa { font-weight: 500; }
+  td.signal { color: #90caf9; font-size: 0.75rem; font-weight: 600; }
+  td.real { color: #fff; font-weight: 600; }
+  .detail { color: #555; font-size: 0.72rem; margin-left: 4px; }
+  td.resultado { font-weight: 700; font-size: 0.8rem; }
+  td.resultado.green { color: #4caf50; }
+  td.resultado.red   { color: #f44336; }
+  td.resultado.void  { color: #888; }
+  tr.res-green { background: rgba(76,175,80,.04); }
+  tr.res-red   { background: rgba(244,67,54,.04); }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 4px;
+            font-size: 0.7rem; font-weight: 700; }
+  .badge.PL  { background: #3700b3; color: #bb86fc; }
+  .badge.PPL { background: #005c2b; color: #69f0ae; }
+  .badge.BRA { background: #004d40; color: #64ffda; }
+  footer { margin-top: 20px; font-size: 0.75rem; color: #555; }
+</style>
+</head>
+<body>
+<h1>⚽ Lançamentos Laterais — Dashboard</h1>
+<div class="sub">Gerado em 10/08/2026 21:44 · 1 entradas · <a href="lançamentos_registo.html" style="color:#64b5f6">Ver registo HTML →</a></div>
+
+<div class="stats">
+  <div class="stat"><div class="label">Total</div><div class="val">1</div></div>
+  <div class="stat"><div class="label">Fechados</div><div class="val">0</div></div>
+  <div class="stat green"><div class="label">GREEN</div><div class="val">0</div></div>
+  <div class="stat red"><div class="label">RED</div><div class="val">0</div></div>
+  <div class="stat"><div class="label">Win Rate</div><div class="val">—</div></div>
+  <div class="stat roi"><div class="label">ROI (u)</div><div class="val">—</div></div>
+</div>
+
+<table>
+<thead>
+  <tr>
+    <th>Liga</th><th>Casa</th><th>Fora</th><th>KO</th>
+    <th>Linha</th><th>Modelo</th><th>Signal</th>
+    <th>Odd O</th><th>Odd U</th><th>Real</th><th>Resultado</th>
+  </tr>
+</thead>
+<tbody>
+
+        <tr class="res-">
+          <td>PPL</td>
+          <td class="equipa">Estrela da Amadora</td>
+          <td class="equipa">Sporting Clube de Portugal</td>
+          <td>08/08 19:30</td>
+          <td class="num">34.5</td>
+          <td class="num">—</td>
+          <td class="signal">—</td>
+          <td class="num">1.85</td>
+          <td class="num">1.85</td>
+          <td class="num real">—<span class="detail"></span></td>
+          <td class="resultado ">Pendente</td>
+        </tr>
+</tbody>
+</table>
+
+<footer>DB: C:\ModLancamentos\lancamentos_lines.db · Corre <code>python gerar_dashboard.py</code> para actualizar</footer>
+</body>
+</html>

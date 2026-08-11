@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registo de Entradas — Lançamentos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #21253a;
+    --accent: #4f8ef7; --green: #22c55e; --red: #ef4444;
+    --yellow: #facc15; --orange: #f97316; --text: #e2e8f0;
+    --muted: #64748b; --border: #2d3348; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; padding: 24px 16px; }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+
+  /* Header */
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
+  .page-title { font-size: 1.4rem; font-weight: 800; }
+  .back-link { color: var(--muted); text-decoration: none; font-size: 0.85rem; font-weight: 600;
+    padding: 7px 16px; border: 1.5px solid var(--border); border-radius: 8px; transition: all .2s; }
+  .back-link:hover { color: var(--text); border-color: var(--accent); }
+
+  /* Stats summary */
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .sum-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; text-align: center; }
+  .sum-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .sum-val { font-size: 1.5rem; font-weight: 800; }
+
+  /* Toolbar */
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .toolbar-right { margin-left: auto; display: flex; gap: 8px; }
+  select.filter { background: var(--card2); border: 1.5px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 8px 12px; font-size: 0.85rem; }
+  .btn-export { padding: 9px 20px; background: #16a34a; color: #fff; border: none;
+    border-radius: 8px; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
+  .btn-export:hover { background: #15803d; }
+  .btn-clear { padding: 9px 16px; background: transparent; color: var(--red);
+    border: 1.5px solid var(--red); border-radius: 8px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer; }
+  .btn-clear:hover { background: var(--red); color: #fff; }
+
+  /* Tabela */
+  .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  th { background: var(--card2); color: var(--muted); font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.05em; padding: 10px 12px; text-align: left; white-space: nowrap;
+    position: sticky; top: 0; z-index: 1; }
+  td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  /* resultado real input */
+  input.inp-real { width: 72px; background: var(--card2); border: 1.5px solid var(--border);
+    border-radius: 6px; color: var(--text); padding: 5px 8px; font-size: 0.88rem; text-align: center; }
+  input.inp-real:focus { outline: none; border-color: var(--accent); }
+
+  /* badges */
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+  .badge-green  { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+  .badge-red    { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+  .badge-open   { background: rgba(100,116,139,.1); color: var(--muted); border: 1px solid var(--border); }
+  .badge-void   { background: rgba(250,204,21,.08); color: var(--yellow); border: 1px solid rgba(250,204,21,.3); }
+
+  .sig-over-forte  { color: var(--green); font-weight: 700; }
+  .sig-over-mod    { color: var(--yellow); font-weight: 700; }
+  .sig-under-forte { color: var(--red); font-weight: 700; }
+  .sig-under-mod   { color: var(--orange); font-weight: 700; }
+  .sig-neutro      { color: var(--muted); }
+
+  .td-del { color: var(--muted); cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+  .td-del:hover { color: var(--red); background: rgba(239,68,68,.08); }
+
+  .empty-state { text-align: center; color: var(--muted); padding: 60px 24px; font-size: 0.95rem; }
+  .empty-state a { color: var(--accent); text-decoration: none; }
+
+  /* Resultado real — célula destacada quando preenchida */
+  td.real-green { background: rgba(34,197,94,.05); }
+  td.real-red   { background: rgba(239,68,68,.05); }
+
+  @media (max-width: 600px) {
+    .summary { grid-template-columns: repeat(2, 1fr); }
+    .toolbar { flex-direction: column; align-items: flex-start; }
+    .toolbar-right { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">📋 Registo de Entradas</div>
+      <div style="color:var(--muted);font-size:0.82rem;margin-top:3px">Lançamentos Laterais · PL / PPL / BRA</div>
+    </div>
+    <a href="lançamentos_calc.html" class="back-link">← Calculadora</a>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary">
+    <div class="sum-box"><div class="sum-label">Total Entradas</div><div class="sum-val" id="sTotal">0</div></div>
+    <div class="sum-box"><div class="sum-label">Fechadas</div><div class="sum-val" id="sFechadas">0</div></div>
+    <div class="sum-box"><div class="sum-label">✅ Green</div><div class="sum-val" style="color:var(--green)" id="sGreen">0</div></div>
+    <div class="sum-box"><div class="sum-label">❌ Red</div><div class="sum-val" style="color:var(--red)" id="sRed">0</div></div>
+    <div class="sum-box"><div class="sum-label">Win Rate</div><div class="sum-val" id="sWR">—</div></div>
+    <div class="sum-box"><div class="sum-label">ROI</div><div class="sum-val" id="sROI">—</div></div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <select class="filter" id="filtLiga" onchange="renderTabela()">
+      <option value="">Todas as ligas</option>
+      <option value="PL">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League</option>
+      <option value="PPL">🇵🇹 Primeira Liga</option>
+      <option value="BRA">🇧🇷 Brasileirão</option>
+    </select>
+    <select class="filter" id="filtResult" onchange="renderTabela()">
+      <option value="">Todos os resultados</option>
+      <option value="Aberta">Abertas</option>
+      <option value="GREEN">GREEN ✅</option>
+      <option value="RED">RED ❌</option>
+      <option value="Void">Void</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn-export" onclick="exportarExcel()">📥 Exportar Excel</button>
+      <button class="btn-clear" onclick="limparTudo()">🗑 Limpar Tudo</button>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div class="table-wrap" id="tableWrap"></div>
+
+</div>
+
+<script>
+const STORE_KEY = 'lancamentos_entradas_v1';
+
+function carregarEntradas() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); }
+  catch { return []; }
+}
+function guardarEntradas(arr) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(arr));
+}
+
+// ── Calcular resultado automático ────────────────────────────
+// Lógica: signal indica se o modelo aposta OVER ou UNDER vs linha
+// Se OVER: real > linha → GREEN, real < linha → RED
+// Se UNDER: real < linha → GREEN, real > linha → RED
+function calcResultado(entrada, real) {
+  if (real === '' || real === null || real === undefined || isNaN(parseFloat(real))) return null;
+  const r = parseFloat(real);
+  const linha = parseFloat(entrada.linha);
+  const sig = (entrada.signal || '').toUpperCase();
+  const isOver  = sig.includes('OVER');
+  const isUnder = sig.includes('UNDER');
+  if (!isOver && !isUnder) return null; // sem edge → não determina
+  if (r === linha) return 'Void';
+  if (isOver)  return r > linha ? 'GREEN' : 'RED';
+  if (isUnder) return r < linha ? 'GREEN' : 'RED';
+  return null;
+}
+
+// ── Estatísticas ─────────────────────────────────────────────
+function atualizarStats(entradas) {
+  const fechadas = entradas.filter(e => e.resultado === 'GREEN' || e.resultado === 'RED');
+  const greens   = fechadas.filter(e => e.resultado === 'GREEN').length;
+  const reds     = fechadas.filter(e => e.resultado === 'RED').length;
+  const wr       = fechadas.length ? (greens / fechadas.length * 100).toFixed(1) : null;
+
+  // ROI simples: soma das odds ganhas - nº apostas / nº apostas * 100
+  let roi = null;
+  const comOdd = fechadas.filter(e => e.odd && !isNaN(parseFloat(e.odd)));
+  if (comOdd.length) {
+    const lucro = comOdd.reduce((acc, e) => {
+      return acc + (e.resultado === 'GREEN' ? parseFloat(e.odd) - 1 : -1);
+    }, 0);
+    roi = (lucro / comOdd.length * 100).toFixed(1);
+  }
+
+  document.getElementById('sTotal').textContent    = entradas.length;
+  document.getElementById('sFechadas').textContent = fechadas.length;
+  document.getElementById('sGreen').textContent    = greens;
+  document.getElementById('sRed').textContent      = reds;
+  document.getElementById('sWR').textContent       = wr !== null ? wr + '%' : '—';
+  document.getElementById('sWR').style.color       = wr >= 55 ? 'var(--green)' : wr >= 45 ? 'var(--yellow)' : wr !== null ? 'var(--red)' : 'var(--text)';
+  document.getElementById('sROI').textContent      = roi !== null ? (parseFloat(roi) >= 0 ? '+' : '') + roi + '%' : '—';
+  document.getElementById('sROI').style.color      = roi >= 5 ? 'var(--green)' : roi >= 0 ? 'var(--yellow)' : roi !== null ? 'var(--red)' : 'var(--text)';
+}
+
+// ── Signal class ─────────────────────────────────────────────
+function sigClass(s) {
+  s = (s||'').toUpperCase();
+  if (s.includes('OVER FORTE'))  return 'sig-over-forte';
+  if (s.includes('OVER MOD'))    return 'sig-over-mod';
+  if (s.includes('UNDER FORTE')) return 'sig-under-forte';
+  if (s.includes('UNDER MOD'))   return 'sig-under-mod';
+  return 'sig-neutro';
+}
+function sigLabel(s) { return (s||'').replace(/[🟢🔴🟡🟠⚪]/g,'').trim() || '—'; }
+
+function resultadoBadge(res) {
+  if (res === 'GREEN') return '<span class="badge badge-green">✅ GREEN</span>';
+  if (res === 'RED')   return '<span class="badge badge-red">❌ RED</span>';
+  if (res === 'Void')  return '<span class="badge badge-void">⚪ Void</span>';
+  return '<span class="badge badge-open">⏳ Aberta</span>';
+}
+
+// ── Render ───────────────────────────────────────────────────
+function renderTabela() {
+  let entradas = carregarEntradas();
+  const filtLiga   = document.getElementById('filtLiga').value;
+  const filtResult = document.getElementById('filtResult').value;
+
+  atualizarStats(entradas);
+
+  if (filtLiga)   entradas = entradas.filter(e => e.liga === filtLiga);
+  if (filtResult) entradas = entradas.filter(e => e.resultado === filtResult);
+
+  const wrap = document.getElementById('tableWrap');
+
+  if (!entradas.length) {
+    wrap.innerHTML = `<div class="empty-state">
+      Sem entradas${filtLiga || filtResult ? ' para este filtro' : ''}.<br>
+      <a href="lançamentos_calc.html">Vai à calculadora para registar jogos.</a>
+    </div>`;
+    return;
+  }
+
+  const rows = entradas.map(e => {
+    const realVal = e.realTotal !== undefined ? e.realTotal : '';
+    const res     = e.resultado || 'Aberta';
+    const diffStr = e.diff >= 0 ? `+${e.diff}` : `${e.diff}`;
+    const diffColor = e.diff >= 0 ? 'color:var(--green)' : 'color:var(--red)';
+    const valStr  = e.value ? ((parseFloat(e.value) >= 0 ? '+' : '') + e.value + '%') : '—';
+    const valColor = parseFloat(e.value) >= 5 ? 'color:var(--green)' : parseFloat(e.value) >= 0 ? 'color:var(--yellow)' : 'color:var(--red)';
+
+    // célula real colorida
+    let realCellClass = '';
+    if (res === 'GREEN') realCellClass = 'real-green';
+    if (res === 'RED')   realCellClass = 'real-red';
+
+    return `<tr>
+      <td style="color:var(--muted);font-size:0.74rem">${e.data}<br>${e.hora}</td>
+      <td><strong>${e.liga}</strong></td>
+      <td style="font-weight:600">${e.casa}</td>
+      <td style="color:var(--muted)">${e.fora}</td>
+      <td style="font-weight:700;text-align:center">${e.modelo}</td>
+      <td style="text-align:center">${e.linha}</td>
+      <td style="font-weight:700;text-align:center;${diffColor}">${diffStr}</td>
+      <td class="${sigClass(e.signal)}">${sigLabel(e.signal)}</td>
+      <td style="text-align:center">${e.pOver}%</td>
+      <td style="text-align:center">${e.odd || '—'}</td>
+      <td style="text-align:center;${valColor}">${valStr}</td>
+      <td>${e.bookie}</td>
+      <td class="${realCellClass}" style="text-align:center">
+        <input class="inp-real" type="number" min="0" max="99" step="1"
+          value="${realVal}"
+          placeholder="—"
+          onchange="guardarReal(${e.id}, this.value)"
+          title="Total real de lançamentos no jogo">
+      </td>
+      <td style="text-align:center">${resultadoBadge(res)}</td>
+      <td class="td-del" onclick="eliminarEntrada(${e.id})" title="Eliminar">✕</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<table>
+    <thead><tr>
+      <th>Data/Hora</th>
+      <th>Liga</th>
+      <th>Casa</th>
+      <th>Fora</th>
+      <th style="text-align:center">Modelo</th>
+      <th style="text-align:center">Linha</th>
+      <th style="text-align:center">Δ</th>
+      <th>Signal</th>
+      <th style="text-align:center">P(Over)</th>
+      <th style="text-align:center">Odd</th>
+      <th style="text-align:center">Value</th>
+      <th>Bookie</th>
+      <th style="text-align:center">Total Real</th>
+      <th style="text-align:center">Resultado</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ── Guardar resultado real ───────────────────────────────────
+function guardarReal(id, val) {
+  const entradas = carregarEntradas();
+  const e = entradas.find(x => x.id === id);
+  if (!e) return;
+  const num = val === '' ? undefined : parseFloat(val);
+  e.realTotal = num;
+  const res = calcResultado(e, num);
+  e.resultado = res || (num !== undefined ? 'Void' : 'Aberta');
+  guardarEntradas(entradas);
+  renderTabela();
+}
+
+function eliminarEntrada(id) {
+  if (!confirm('Eliminar esta entrada?')) return;
+  guardarEntradas(carregarEntradas().filter(x => x.id !== id));
+  renderTabela();
+}
+
+function limparTudo() {
+  if (!confirm('Limpar TODAS as entradas? Irreversível.')) return;
+  guardarEntradas([]);
+  renderTabela();
+}
+
+// ── Exportar Excel ───────────────────────────────────────────
+function exportarExcel() {
+  const entradas = carregarEntradas();
+  if (!entradas.length) { alert('Sem entradas para exportar.'); return; }
+
+  const headers = [
+    'Data','Hora','Liga','Casa','Fora',
+    'Modelo','Linha','Δ','Signal','P(Over)%',
+    'Odd','Odd Justa','Value%','Bookie',
+    'Total Real','Resultado'
+  ];
+
+  const rows = entradas.map(e => [
+    e.data, e.hora, e.liga, e.casa, e.fora,
+    e.modelo, e.linha, e.diff,
+    sigLabel(e.signal),
+    e.pOver,
+    e.odd || '', e.oddJusta || '',
+    e.value ? parseFloat(e.value) : '',
+    e.bookie,
+    e.realTotal !== undefined ? e.realTotal : '',
+    e.resultado || 'Aberta'
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = [9,6,6,18,18,8,8,6,16,8,6,8,7,10,10,10].map(w=>({wch:w}));
+
+  // Colorir cabeçalho
+  headers.forEach((_, ci) => {
+    const ref = XLSX.utils.encode_cell({r:0,c:ci});
+    if (ws[ref]) ws[ref].s = {font:{bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'1F3864'}}};
+  });
+
+  // Colorir resultados
+  entradas.forEach((e, ri) => {
+    const resRef = XLSX.utils.encode_cell({r:ri+1, c:15});
+    if (ws[resRef]) {
+      const rgb = e.resultado === 'GREEN' ? '166534' : e.resultado === 'RED' ? '991B1B' : '374151';
+      ws[resRef].s = {font:{bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb}}};
+    }
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Registo');
+  const hoje = new Date().toLocaleDateString('pt-PT').replace(/\//g,'-');
+  XLSX.writeFile(wb, `lancamentos_registo_${hoje}.xlsx`);
+}
+
+// init
+renderTabela();
+</script>
+</body>
+</html>

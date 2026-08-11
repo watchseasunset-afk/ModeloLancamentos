@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "C:\Claude_Mod_Faltas\Faltas_206_2027\faltas_app_v5\faltas_app\lancamentos_model\fetch_stats_flashscore.py", line 132, in <module>
+    print(f'\n\u2713 CONCLUÍDO: {OUT_XLSX}')
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\home\AppData\Local\Python\pythoncore-3.14-64\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>

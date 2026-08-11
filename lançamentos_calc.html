@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modelo Lançamentos Laterais</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #21253a;
+    --accent: #4f8ef7;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #facc15;
+    --orange: #f97316;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --border: #2d3348;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; padding: 24px 16px; }
+
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: 6px; letter-spacing: -0.5px; }
+  .subtitle { text-align: center; color: var(--muted); font-size: 0.85rem; margin-bottom: 28px; }
+
+  /* Liga tabs */
+  .liga-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
+  .liga-tab {
+    padding: 8px 22px; border-radius: 999px; border: 2px solid var(--border);
+    background: var(--card); color: var(--muted); cursor: pointer; font-size: 0.9rem;
+    font-weight: 600; transition: all .2s;
+  }
+  .liga-tab:hover { border-color: var(--accent); color: var(--text); }
+  .liga-tab.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+  /* Form */
+  .form-card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 24px; margin-bottom: 20px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.span2 { grid-column: span 2; }
+  label { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  select, input[type=number], input[type=text] {
+    background: var(--card2); border: 1.5px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 10px 14px; font-size: 0.95rem; width: 100%;
+    transition: border-color .2s; appearance: none;
+  }
+  select:focus, input:focus { outline: none; border-color: var(--accent); }
+
+  /* 3-col para linha/odd/casa */
+  .form-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px; }
+
+  .btn-calc {
+    width: 100%; padding: 14px; background: var(--accent); color: #fff;
+    border: none; border-radius: 10px; font-size: 1.05rem; font-weight: 700;
+    cursor: pointer; margin-top: 20px; transition: background .2s, transform .1s;
+    letter-spacing: 0.02em;
+  }
+  .btn-calc:hover { background: #3a7ef5; transform: translateY(-1px); }
+  .btn-calc:active { transform: translateY(0); }
+
+  /* Results */
+  #result { display: none; }
+  .result-header { text-align: center; margin-bottom: 20px; }
+  .matchup { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+  .matchup span { color: var(--accent); }
+
+  /* Signal badge */
+  .signal-badge {
+    display: inline-block; padding: 6px 20px; border-radius: 999px;
+    font-size: 1rem; font-weight: 800; letter-spacing: 0.04em; margin: 8px 0;
+  }
+  .sig-over-forte   { background: rgba(34,197,94,.15); color: var(--green); border: 2px solid var(--green); }
+  .sig-over-mod     { background: rgba(250,204,21,.1); color: var(--yellow); border: 2px solid var(--yellow); }
+  .sig-under-forte  { background: rgba(239,68,68,.15); color: var(--red); border: 2px solid var(--red); }
+  .sig-under-mod    { background: rgba(249,115,22,.12); color: var(--orange); border: 2px solid var(--orange); }
+  .sig-neutro       { background: rgba(100,116,139,.12); color: var(--muted); border: 2px solid var(--border); }
+
+  /* Stats grid */
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat-box {
+    background: var(--card2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; text-align: center;
+  }
+  .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .stat-val { font-size: 1.6rem; font-weight: 800; }
+  .stat-sub { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  /* Prob bar */
+  .prob-section { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .prob-title { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .prob-bar-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .prob-bar-label { width: 90px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+  .prob-bar-bg { flex: 1; background: var(--border); border-radius: 999px; height: 14px; overflow: hidden; }
+  .prob-bar-fill { height: 100%; border-radius: 999px; transition: width .6s ease; }
+  .prob-bar-pct { width: 52px; font-size: 0.95rem; font-weight: 700; text-align: right; }
+  .fill-over { background: linear-gradient(90deg, var(--green), #16a34a); }
+  .fill-under { background: linear-gradient(90deg, var(--red), #b91c1c); }
+
+  /* Teams averages */
+  .teams-section { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .team-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .team-name { font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; }
+  .team-casa { color: var(--accent); }
+  .team-fora { color: var(--orange); }
+  .team-stat { display: flex; justify-content: space-between; font-size: 0.82rem; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .team-stat:last-child { border-bottom: none; }
+  .team-stat-val { font-weight: 600; }
+
+  /* IC */
+  .ic-row { display: flex; gap: 10px; margin-bottom: 16px; }
+  .ic-box { flex: 1; background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; text-align: center; }
+  .ic-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .ic-val { font-size: 1rem; font-weight: 700; margin-top: 4px; }
+
+  /* Model info */
+  .model-info { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
+  .info-chip { background: var(--card2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 14px; font-size: 0.78rem; color: var(--muted); }
+
+  .verde { color: var(--green); }
+  .vermelho { color: var(--red); }
+  .amarelo { color: var(--yellow); }
+
+  /* Registar botão */
+  .btn-registar {
+    width: 100%; padding: 13px; background: transparent;
+    color: var(--green); border: 2px solid var(--green); border-radius: 10px;
+    font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 12px;
+    transition: all .2s; letter-spacing: 0.02em;
+  }
+  .btn-registar:hover { background: var(--green); color: #000; }
+  .btn-registar:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Secção de registo */
+  .log-section { margin-top: 32px; }
+  .log-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .log-title { font-size: 1.1rem; font-weight: 700; }
+  .log-count { font-size: 0.8rem; color: var(--muted); background: var(--card2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 12px; }
+
+  .btn-export {
+    padding: 9px 20px; background: #16a34a; color: #fff; border: none;
+    border-radius: 8px; font-size: 0.88rem; font-weight: 700; cursor: pointer;
+    transition: background .2s;
+  }
+  .btn-export:hover { background: #15803d; }
+  .btn-clear {
+    padding: 9px 16px; background: transparent; color: var(--red);
+    border: 1.5px solid var(--red); border-radius: 8px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer; transition: all .2s;
+  }
+  .btn-clear:hover { background: var(--red); color: #fff; }
+
+  .log-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { background: var(--card2); color: var(--muted); font-size: 0.72rem; text-transform: uppercase;
+       letter-spacing: 0.06em; padding: 10px 12px; text-align: left; white-space: nowrap; }
+  td { padding: 9px 12px; border-top: 1px solid var(--border); white-space: nowrap; }
+  tr:hover td { background: var(--card2); }
+  .td-signal { font-weight: 700; font-size: 0.78rem; }
+  .td-del { color: var(--muted); cursor: pointer; font-size: 1rem; }
+  .td-del:hover { color: var(--red); }
+  .empty-log { text-align: center; color: var(--muted); padding: 32px; font-size: 0.9rem; }
+
+  /* Resultado */
+  .resultado-tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+  .res-win  { background: rgba(34,197,94,.15); color: var(--green); }
+  .res-loss { background: rgba(239,68,68,.15); color: var(--red); }
+  .res-open { background: rgba(100,116,139,.12); color: var(--muted); }
+  select.res-select { padding: 3px 6px; font-size: 0.78rem; width: auto; }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-grid .span2 { grid-column: span 1; }
+    .form-3 { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .teams-section { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚽ Modelo Lançamentos Laterais</h1>
+  <p class="subtitle">PL · PPL · Brasileirão &nbsp;|&nbsp; Dados 2025/26</p>
+
+  <!-- Liga -->
+  <div class="liga-tabs">
+    <button class="liga-tab active" data-liga="PL">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League</button>
+    <button class="liga-tab" data-liga="PPL">🇵🇹 Primeira Liga</button>
+    <button class="liga-tab" data-liga="BRA">🇧🇷 Brasileirão</button>
+  </div>
+
+  <!-- Form -->
+  <div class="form-card">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>🏠 Casa</label>
+        <select id="selHome"></select>
+      </div>
+      <div class="form-group">
+        <label>✈️ Fora</label>
+        <select id="selAway"></select>
+      </div>
+    </div>
+    <div class="form-3">
+      <div class="form-group">
+        <label>📊 Linha</label>
+        <input type="number" id="inpLinha" placeholder="ex: 35.5" step="0.5" min="20" max="60">
+      </div>
+      <div class="form-group">
+        <label>💰 Odd Over</label>
+        <input type="number" id="inpOdd" placeholder="ex: 1.85" step="0.01" min="1" max="10">
+      </div>
+      <div class="form-group">
+        <label>🏦 Casa de Apostas</label>
+        <select id="selBookie">
+          <option value="22bet">22bet</option>
+          <option value="Betano">Betano</option>
+          <option value="Bet365">Bet365</option>
+          <option value="Solverde">Solverde</option>
+          <option value="Placard">Placard</option>
+          <option value="Outra">Outra</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn-calc" onclick="calcular()">▶ CALCULAR</button>
+  </div>
+
+  <!-- Resultado -->
+  <div id="result">
+    <div class="result-header">
+      <div class="matchup" id="rMatchup"></div>
+      <div id="rSignal"></div>
+      <div style="color:var(--muted);font-size:0.82rem;margin-top:4px" id="rBookie"></div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-label">Modelo prevê</div>
+        <div class="stat-val" id="rPred">—</div>
+        <div class="stat-sub">lançamentos</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Linha bookmaker</div>
+        <div class="stat-val" id="rLinha">—</div>
+        <div class="stat-sub" id="rDiff">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Média liga</div>
+        <div class="stat-val" id="rMedia">—</div>
+        <div class="stat-sub">histórico</div>
+      </div>
+    </div>
+
+    <!-- Probabilidades -->
+    <div class="prob-section">
+      <div class="prob-title">Probabilidades</div>
+      <div class="prob-bar-wrap">
+        <div class="prob-bar-label verde">OVER</div>
+        <div class="prob-bar-bg"><div class="prob-bar-fill fill-over" id="barOver" style="width:0%"></div></div>
+        <div class="prob-bar-pct verde" id="pOver">—</div>
+      </div>
+      <div class="prob-bar-wrap">
+        <div class="prob-bar-label vermelho">UNDER</div>
+        <div class="prob-bar-bg"><div class="prob-bar-fill fill-under" id="barUnder" style="width:0%"></div></div>
+        <div class="prob-bar-pct vermelho" id="pUnder">—</div>
+      </div>
+    </div>
+
+    <!-- IC -->
+    <div class="ic-row">
+      <div class="ic-box"><div class="ic-label">IC 68%</div><div class="ic-val" id="ic68">—</div></div>
+      <div class="ic-box"><div class="ic-label">IC 90%</div><div class="ic-val" id="ic90">—</div></div>
+      <div class="ic-box"><div class="ic-label">Odd justa</div><div class="ic-val" id="rOddJusta">—</div></div>
+      <div class="ic-box"><div class="ic-label">Value</div><div class="ic-val" id="rValue">—</div></div>
+    </div>
+
+    <!-- Médias das equipas -->
+    <div class="teams-section">
+      <div class="team-card">
+        <div class="team-name team-casa" id="rHomeName">—</div>
+        <div id="rHomeStats"></div>
+      </div>
+      <div class="team-card">
+        <div class="team-name team-fora" id="rAwayName">—</div>
+        <div id="rAwayStats"></div>
+      </div>
+    </div>
+
+    <!-- Info modelo -->
+    <div class="model-info">
+      <div class="info-chip" id="infoR2">R² —</div>
+      <div class="info-chip" id="infoMAE">MAE —</div>
+      <div class="info-chip" id="infoSigma">σ —</div>
+      <div class="info-chip" id="infoN">N —</div>
+    </div>
+
+    <!-- Botões ação -->
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn-registar" id="btnRegistar" onclick="registarEntrada()" style="flex:1">
+        📝 Registar Entrada
+      </button>
+      <a href="lançamentos_registo.html" style="flex:0 0 auto;padding:13px 20px;background:var(--card2);color:var(--muted);border:2px solid var(--border);border-radius:10px;font-size:0.9rem;font-weight:700;text-decoration:none;display:flex;align-items:center;white-space:nowrap">
+        📋 Ver Registo
+      </a>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// Dados dos modelos (extraídos dos pkl Python)
+// ─────────────────────────────────────────────────────────────
+const MODELS = {"PL": {"coef": [0.3006728733602665, 0.3887030785972385, 0.02384173460647109, -0.2568240184555756, 1.5841585536384382, 0.14255393884535558, 0.4814676010548088, -0.0007967279989542497, 1.3882933091544574, 0.04289579379159494, 0.45450215745593925, 0.3468032420372984, 1.1378981825958643, -0.008065513533767317, 0.5280350204185513, 0.5040520856243207], "intercept": 35.826315789473576, "scaler_mean": [25.42894736842105, 48.936842105263196, 19.465789473684247, 50.71578947368425, 18.447368421052577, 10.994736842105262, 8.476315789473682, 16.87894736842103, 28.52631578947366, 50.47894736842109, 16.678947368421028, 49.28421052631584, 17.378947368421024, 10.649999999999997, 8.068421052631578, 16.473684210526308], "scaler_scale": [3.808114786498278, 4.797841158103644, 2.795934672434387, 5.208994990289804, 1.4326524612732314, 0.974167732006711, 1.0677175542357964, 2.0390305121216032, 3.66974604176915, 4.943864940915826, 2.1624406545585306, 6.098962265846677, 1.0112387839261032, 0.8048115348627907, 0.9640490556592283, 1.9998614910486934], "feat_cols": ["H_Alívios_casa", "H_Passes longos_casa", "H_Cruzamentos_casa", "H_Posse de bola_casa", "H_Lançamentos_casa", "H_Faltas_fora", "H_Interceções_fora", "H_Desarmes_fora", "A_Alívios_fora", "A_Passes longos_fora", "A_Cruzamentos_fora", "A_Posse de bola_fora", "A_Lançamentos_fora", "A_Faltas_casa", "A_Interceções_casa", "A_Desarmes_casa"], "std_resid": 6.533010531150851, "mu_global": 35.82631578947368, "mae_cv": 5.49315078453883, "r2": 0.17540962816669647, "teams": {"Arsenal": {"Alívios_fora": 27.63, "Desarmes_casa": 15.26, "Faltas_casa": 10.0, "Passes longos_casa": 41.05, "Desarmes_fora": 16.42, "Cruzamentos_fora": 17.58, "Passes longos_fora": 48.63, "Faltas_fora": 10.58, "Interceções_casa": 7.42, "Alívios_casa": 19.68, "Lançamentos_fora": 17.42, "Interceções_fora": 6.74, "Posse de bola_fora": 55.74, "Cruzamentos_casa": 18.05, "Lançamentos_casa": 16.89, "Posse de bola_casa": 56.53}, "Aston Villa": {"Alívios_fora": 22.21, "Desarmes_casa": 14.68, "Faltas_casa": 10.0, "Passes longos_casa": 42.42, "Desarmes_fora": 16.21, "Cruzamentos_fora": 15.79, "Passes longos_fora": 42.47, "Faltas_fora": 9.95, "Interceções_casa": 6.16, "Alívios_casa": 19.79, "Lançamentos_fora": 15.95, "Interceções_fora": 6.37, "Posse de bola_fora": 54.11, "Cruzamentos_casa": 16.0, "Lançamentos_casa": 15.84, "Posse de bola_casa": 53.11}, "Bournemouth": {"Alívios_fora": 31.79, "Desarmes_casa": 15.05, "Faltas_casa": 11.53, "Passes longos_casa": 52.21, "Desarmes_fora": 19.37, "Cruzamentos_fora": 17.32, "Passes longos_fora": 54.26, "Faltas_fora": 12.53, "Interceções_casa": 9.21, "Alívios_casa": 29.95, "Lançamentos_fora": 17.26, "Interceções_fora": 10.0, "Posse de bola_fora": 47.84, "Cruzamentos_casa": 21.16, "Lançamentos_casa": 20.68, "Posse de bola_casa": 52.63}, "Brentford": {"Alívios_fora": 29.26, "Desarmes_casa": 13.95, "Faltas_casa": 9.63, "Passes longos_casa": 57.89, "Desarmes_fora": 15.11, "Cruzamentos_fora": 17.53, "Passes longos_fora": 57.84, "Faltas_fora": 10.89, "Interceções_casa": 9.26, "Alívios_casa": 29.26, "Lançamentos_fora": 17.53, "Interceções_fora": 8.11, "Posse de bola_fora": 47.89, "Cruzamentos_casa": 18.37, "Lançamentos_casa": 19.68, "Posse de bola_casa": 47.26}, "Brighton": {"Alívios_fora": 24.79, "Desarmes_casa": 18.32, "Faltas_casa": 11.32, "Passes longos_casa": 45.47, "Desarmes_fora": 17.26, "Cruzamentos_fora": 19.84, "Passes longos_fora": 48.53, "Faltas_fora": 12.53, "Interceções_casa": 6.95, "Alívios_casa": 22.37, "Lançamentos_fora": 17.11, "Interceções_fora": 9.95, "Posse de bola_fora": 53.21, "Cruzamentos_casa": 17.84, "Lançamentos_casa": 16.26, "Posse de bola_casa": 55.05}, "Burnley": {"Alívios_fora": 29.58, "Desarmes_casa": 16.0, "Faltas_casa": 10.0, "Passes longos_casa": 53.84, "Desarmes_fora": 17.53, "Cruzamentos_fora": 12.05, "Passes longos_fora": 57.37, "Faltas_fora": 10.79, "Interceções_casa": 9.47, "Alívios_casa": 30.47, "Lançamentos_fora": 16.89, "Interceções_fora": 8.58, "Posse de bola_fora": 41.26, "Cruzamentos_casa": 15.47, "Lançamentos_casa": 19.53, "Posse de bola_casa": 43.42}, "Chelsea": {"Alívios_fora": 24.63, "Desarmes_casa": 15.53, "Faltas_casa": 10.84, "Passes longos_casa": 45.63, "Desarmes_fora": 15.63, "Cruzamentos_fora": 14.47, "Passes longos_fora": 45.26, "Faltas_fora": 11.26, "Interceções_casa": 9.26, "Alívios_casa": 19.21, "Lançamentos_fora": 16.37, "Interceções_fora": 10.26, "Posse de bola_fora": 56.47, "Cruzamentos_casa": 21.32, "Lançamentos_casa": 15.42, "Posse de bola_casa": 58.84}, "Crystal Palace": {"Alívios_fora": 36.47, "Desarmes_casa": 16.84, "Faltas_casa": 10.42, "Passes longos_casa": 56.32, "Desarmes_fora": 20.26, "Cruzamentos_fora": 14.05, "Passes longos_fora": 52.95, "Faltas_fora": 10.53, "Interceções_casa": 7.68, "Alívios_casa": 30.79, "Lançamentos_fora": 15.32, "Interceções_fora": 8.84, "Posse de bola_fora": 43.89, "Cruzamentos_casa": 18.0, "Lançamentos_casa": 18.89, "Posse de bola_casa": 47.95}, "Everton": {"Alívios_fora": 31.89, "Desarmes_casa": 18.95, "Faltas_casa": 10.47, "Passes longos_casa": 50.37, "Desarmes_fora": 18.0, "Cruzamentos_fora": 14.95, "Passes longos_fora": 55.32, "Faltas_fora": 11.16, "Interceções_casa": 7.84, "Alívios_casa": 27.68, "Lançamentos_fora": 18.32, "Interceções_fora": 8.53, "Posse de bola_fora": 41.16, "Cruzamentos_casa": 20.58, "Lançamentos_casa": 19.79, "Posse de bola_casa": 46.11}, "Fulham": {"Alívios_fora": 26.84, "Desarmes_casa": 15.37, "Faltas_casa": 10.74, "Passes longos_casa": 46.84, "Desarmes_fora": 18.84, "Cruzamentos_fora": 17.21, "Passes longos_fora": 49.32, "Faltas_fora": 11.11, "Interceções_casa": 8.05, "Alívios_casa": 26.32, "Lançamentos_fora": 19.58, "Interceções_fora": 9.11, "Posse de bola_fora": 50.74, "Cruzamentos_casa": 19.21, "Lançamentos_casa": 18.63, "Posse de bola_casa": 52.63}, "Leeds": {"Alívios_fora": 34.53, "Desarmes_casa": 16.63, "Faltas_casa": 10.11, "Passes longos_casa": 53.74, "Desarmes_fora": 18.21, "Cruzamentos_fora": 15.68, "Passes longos_fora": 51.32, "Faltas_fora": 10.84, "Interceções_casa": 9.47, "Alívios_casa": 26.42, "Lançamentos_fora": 17.21, "Interceções_fora": 8.47, "Posse de bola_fora": 43.89, "Cruzamentos_casa": 20.42, "Lançamentos_casa": 19.53, "Posse de bola_casa": 47.63}, "Liverpool": {"Alívios_fora": 25.47, "Desarmes_casa": 14.32, "Faltas_casa": 9.89, "Passes longos_casa": 48.11, "Desarmes_fora": 11.68, "Cruzamentos_fora": 19.11, "Passes longos_fora": 44.42, "Faltas_fora": 10.26, "Interceções_casa": 6.74, "Alívios_casa": 25.0, "Lançamentos_fora": 19.47, "Interceções_fora": 7.16, "Posse de bola_fora": 59.74, "Cruzamentos_casa": 21.16, "Lançamentos_casa": 19.21, "Posse de bola_casa": 58.58}, "Manchester City": {"Alívios_fora": 24.79, "Desarmes_casa": 13.84, "Faltas_casa": 9.84, "Passes longos_casa": 39.21, "Desarmes_fora": 14.95, "Cruzamentos_fora": 16.63, "Passes longos_fora": 38.0, "Faltas_fora": 9.53, "Interceções_casa": 7.84, "Alívios_casa": 18.32, "Lançamentos_fora": 16.21, "Interceções_fora": 8.05, "Posse de bola_fora": 61.11, "Cruzamentos_casa": 15.95, "Lançamentos_casa": 18.37, "Posse de bola_casa": 59.95}, "Manchester Utd": {"Alívios_fora": 25.11, "Desarmes_casa": 19.26, "Faltas_casa": 10.47, "Passes longos_casa": 47.05, "Desarmes_fora": 17.21, "Cruzamentos_fora": 14.74, "Passes longos_fora": 52.32, "Faltas_fora": 10.05, "Interceções_casa": 9.0, "Alívios_casa": 24.84, "Lançamentos_fora": 17.37, "Interceções_fora": 8.11, "Posse de bola_fora": 52.37, "Cruzamentos_casa": 18.95, "Lançamentos_casa": 17.05, "Posse de bola_casa": 51.26}, "Newcastle": {"Alívios_fora": 25.89, "Desarmes_casa": 15.16, "Faltas_casa": 10.84, "Passes longos_casa": 48.95, "Desarmes_fora": 13.79, "Cruzamentos_fora": 22.26, "Passes longos_fora": 46.68, "Faltas_fora": 9.47, "Interceções_casa": 6.74, "Alívios_casa": 26.84, "Lançamentos_fora": 17.63, "Interceções_fora": 7.84, "Posse de bola_fora": 53.32, "Cruzamentos_casa": 24.05, "Lançamentos_casa": 18.84, "Posse de bola_casa": 51.74}, "Nottingham": {"Alívios_fora": 28.68, "Desarmes_casa": 17.16, "Faltas_casa": 10.32, "Passes longos_casa": 49.63, "Desarmes_fora": 16.74, "Cruzamentos_fora": 17.84, "Passes longos_fora": 52.74, "Faltas_fora": 11.11, "Interceções_casa": 7.47, "Alívios_casa": 22.63, "Lançamentos_fora": 17.68, "Interceções_fora": 8.42, "Posse de bola_fora": 44.63, "Cruzamentos_casa": 25.79, "Lançamentos_casa": 18.32, "Posse de bola_casa": 48.89}, "Sunderland": {"Alívios_fora": 31.89, "Desarmes_casa": 14.63, "Faltas_casa": 10.32, "Passes longos_casa": 51.37, "Desarmes_fora": 16.16, "Cruzamentos_fora": 15.79, "Passes longos_fora": 52.95, "Faltas_fora": 11.11, "Interceções_casa": 8.37, "Alívios_casa": 29.11, "Lançamentos_fora": 17.32, "Interceções_fora": 7.37, "Posse de bola_fora": 43.68, "Cruzamentos_casa": 16.42, "Lançamentos_casa": 17.63, "Posse de bola_casa": 46.0}, "Tottenham": {"Alívios_fora": 26.58, "Desarmes_casa": 19.05, "Faltas_casa": 12.58, "Passes longos_casa": 45.89, "Desarmes_fora": 20.26, "Cruzamentos_fora": 17.26, "Passes longos_fora": 52.26, "Faltas_fora": 11.74, "Interceções_casa": 8.21, "Alívios_casa": 26.53, "Lançamentos_fora": 18.42, "Interceções_fora": 8.63, "Posse de bola_fora": 49.37, "Cruzamentos_casa": 23.74, "Lançamentos_casa": 19.89, "Posse de bola_casa": 51.47}, "West Ham": {"Alívios_fora": 30.21, "Desarmes_casa": 18.74, "Faltas_casa": 11.16, "Passes longos_casa": 53.32, "Desarmes_fora": 16.58, "Cruzamentos_fora": 16.84, "Passes longos_fora": 53.11, "Faltas_fora": 11.0, "Interceções_casa": 8.0, "Alívios_casa": 27.74, "Lançamentos_fora": 17.32, "Interceções_fora": 10.26, "Posse de bola_fora": 43.37, "Cruzamentos_casa": 16.74, "Lançamentos_casa": 18.84, "Posse de bola_casa": 41.58}, "Wolves": {"Alívios_fora": 32.26, "Desarmes_casa": 20.74, "Faltas_casa": 12.53, "Passes longos_casa": 49.42, "Desarmes_fora": 17.37, "Cruzamentos_fora": 16.63, "Passes longos_fora": 53.84, "Faltas_fora": 13.47, "Interceções_casa": 8.21, "Alívios_casa": 25.63, "Lançamentos_fora": 17.21, "Interceções_fora": 8.74, "Posse de bola_fora": 41.89, "Cruzamentos_casa": 20.11, "Lançamentos_casa": 19.63, "Posse de bola_casa": 43.68}}}, "PPL": {"coef": [-0.5757694699110645, 0.34387427627694644, 0.552144739889317, -0.391452749690226, 0.7857574159794269, -0.1672661204237882, -0.6946921926120834, 0.5375178934265376, -0.021808030239994853, 2.7286002669625318, -0.5096532991772462, -0.15743852181281465, 0.7697275895937936, 0.5703726136761633, -0.8447282333557868, 1.058031624601487], "intercept": 38.49583333333339, "scaler_mean": [23.781029699467187, 48.78686292295661, 17.876582179394692, 50.678077004014504, 19.495318437349706, 12.973398453398449, 8.005429292929284, 16.463807581307567, 26.00730296902173, 50.0246701967015, 16.659279054279043, 49.193175944425924, 19.308190293502783, 14.370336422836406, 8.243624986124994, 16.835145132645142], "scaler_scale": [2.351321284770555, 3.233164121018687, 1.9638771200926837, 1.2518995414145155, 0.9516445559101492, 2.161331742194894, 1.3433731827712585, 4.0139062018301175, 3.1192254844659972, 2.895722930314572, 2.089748331606741, 1.8013359869958507, 1.791856459940871, 1.262467781032189, 1.0361086014745005, 2.170292178817021], "feat_cols": ["H_Alívios_casa", "H_Passes longos_casa", "H_Cruzamentos_casa", "H_Posse de bola_casa", "H_Lançamentos_casa", "H_Faltas_fora", "H_Interceções_fora", "H_Desarmes_fora", "A_Alívios_fora", "A_Passes longos_fora", "A_Cruzamentos_fora", "A_Posse de bola_fora", "A_Lançamentos_fora", "A_Faltas_casa", "A_Interceções_casa", "A_Desarmes_casa"], "std_resid": 6.841216396267179, "mu_global": 38.49583333333333, "mae_cv": 6.106132520557403, "r2": 0.20942135969799813, "teams": {"Alverca": {"Desarmes_fora": 25.5, "Interceções_casa": 7.62, "Cruzamentos_casa": 20.75, "Interceções_fora": 9.5, "Cruzamentos_fora": 11.5, "Lançamentos_fora": 13.5, "Alívios_casa": 22.94, "Posse de bola_casa": 51.75, "Faltas_fora": 9.5, "Passes longos_fora": 52.5, "Posse de bola_fora": 41.0, "Lançamentos_casa": 19.09, "Alívios_fora": 37.5, "Desarmes_casa": 16.69, "Passes longos_casa": 47.59, "Faltas_casa": 13.28}, "Arouca": {"Desarmes_fora": 11.0, "Interceções_casa": 8.47, "Cruzamentos_casa": 16.53, "Interceções_fora": 7.75, "Cruzamentos_fora": 21.75, "Lançamentos_fora": 22.0, "Alívios_casa": 23.9, "Posse de bola_casa": 49.4, "Faltas_fora": 13.0, "Passes longos_fora": 51.75, "Posse de bola_fora": 51.5, "Lançamentos_casa": 18.8, "Alívios_fora": 24.75, "Desarmes_casa": 13.67, "Passes longos_casa": 48.93, "Faltas_casa": 13.23}, "Benfica": {"Desarmes_fora": 18.67, "Interceções_casa": 7.96, "Cruzamentos_casa": 17.39, "Interceções_fora": 9.0, "Cruzamentos_fora": 14.33, "Lançamentos_fora": 19.67, "Alívios_casa": 21.61, "Posse de bola_casa": 50.86, "Faltas_fora": 15.0, "Passes longos_fora": 49.17, "Posse de bola_fora": 49.17, "Lançamentos_casa": 19.29, "Alívios_fora": 29.0, "Desarmes_casa": 17.07, "Passes longos_casa": 44.79, "Faltas_casa": 13.46}, "Braga": {"Desarmes_fora": 14.75, "Interceções_casa": 8.65, "Cruzamentos_casa": 14.65, "Interceções_fora": 6.0, "Cruzamentos_fora": 11.25, "Lançamentos_fora": 17.25, "Alívios_casa": 23.38, "Posse de bola_casa": 49.62, "Faltas_fora": 9.5, "Passes longos_fora": 51.12, "Posse de bola_fora": 51.38, "Lançamentos_casa": 20.27, "Alívios_fora": 20.62, "Desarmes_casa": 14.46, "Passes longos_casa": 50.31, "Faltas_casa": 12.65}, "Casa Pia": {"Desarmes_fora": 14.2, "Interceções_casa": 8.27, "Cruzamentos_casa": 19.12, "Interceções_fora": 5.8, "Cruzamentos_fora": 19.0, "Lançamentos_fora": 20.6, "Alívios_casa": 27.35, "Posse de bola_casa": 50.46, "Faltas_fora": 13.7, "Passes longos_fora": 52.4, "Posse de bola_fora": 51.7, "Lançamentos_casa": 18.62, "Alívios_fora": 29.0, "Desarmes_casa": 13.08, "Passes longos_casa": 51.96, "Faltas_casa": 15.58}, "Estoril": {"Desarmes_fora": 14.67, "Interceções_casa": 8.95, "Cruzamentos_casa": 16.82, "Interceções_fora": 6.33, "Cruzamentos_fora": 19.42, "Lançamentos_fora": 20.58, "Alívios_casa": 22.27, "Posse de bola_casa": 52.09, "Faltas_fora": 12.25, "Passes longos_fora": 49.5, "Posse de bola_fora": 52.33, "Lançamentos_casa": 20.95, "Alívios_fora": 22.42, "Desarmes_casa": 16.95, "Passes longos_casa": 55.36, "Faltas_casa": 13.45}, "Estrela Da Amadora": {"Desarmes_fora": 16.21, "Interceções_casa": 9.4, "Cruzamentos_casa": 20.2, "Interceções_fora": 9.14, "Cruzamentos_fora": 14.36, "Lançamentos_fora": 17.79, "Alívios_casa": 21.4, "Posse de bola_casa": 52.9, "Faltas_fora": 16.29, "Passes longos_fora": 49.86, "Posse de bola_fora": 45.71, "Lançamentos_casa": 20.05, "Alívios_fora": 26.07, "Desarmes_casa": 16.65, "Passes longos_casa": 49.15, "Faltas_casa": 14.35}, "Famalicao": {"Desarmes_fora": 13.69, "Interceções_casa": 8.5, "Cruzamentos_casa": 19.56, "Interceções_fora": 8.75, "Cruzamentos_fora": 17.69, "Lançamentos_fora": 20.75, "Alívios_casa": 24.83, "Posse de bola_casa": 51.39, "Faltas_fora": 15.44, "Passes longos_fora": 48.38, "Posse de bola_fora": 46.69, "Lançamentos_casa": 20.28, "Alívios_fora": 26.56, "Desarmes_casa": 15.67, "Passes longos_casa": 46.72, "Faltas_casa": 17.89}, "Fc Porto": {"Desarmes_fora": 18.0, "Interceções_casa": 7.94, "Cruzamentos_casa": 16.94, "Interceções_fora": 9.5, "Cruzamentos_fora": 15.17, "Lançamentos_fora": 17.89, "Alívios_casa": 21.88, "Posse de bola_casa": 50.06, "Faltas_fora": 12.61, "Passes longos_fora": 46.28, "Posse de bola_fora": 49.28, "Lançamentos_casa": 19.25, "Alívios_fora": 23.39, "Desarmes_casa": 15.81, "Passes longos_casa": 42.56, "Faltas_casa": 12.88}, "Gil Vicente": {"Desarmes_fora": 17.1, "Interceções_casa": 6.71, "Cruzamentos_casa": 20.07, "Interceções_fora": 7.85, "Cruzamentos_fora": 15.8, "Lançamentos_fora": 21.5, "Alívios_casa": 25.36, "Posse de bola_casa": 50.64, "Faltas_fora": 13.95, "Passes longos_fora": 51.5, "Posse de bola_fora": 50.55, "Lançamentos_casa": 21.0, "Alívios_fora": 24.45, "Desarmes_casa": 15.07, "Passes longos_casa": 50.64, "Faltas_casa": 14.36}, "Moreirense": {"Desarmes_fora": 15.14, "Interceções_casa": 8.0, "Cruzamentos_casa": 16.5, "Interceções_fora": 8.36, "Cruzamentos_fora": 16.09, "Lançamentos_fora": 19.41, "Alívios_casa": 24.17, "Posse de bola_casa": 51.0, "Faltas_fora": 13.5, "Passes longos_fora": 52.14, "Posse de bola_fora": 49.86, "Lançamentos_casa": 17.83, "Alívios_fora": 22.91, "Desarmes_casa": 13.25, "Passes longos_casa": 50.67, "Faltas_casa": 14.33}, "Nacional": {"Desarmes_fora": 15.21, "Interceções_casa": 7.7, "Cruzamentos_casa": 17.0, "Interceções_fora": 8.29, "Cruzamentos_fora": 17.38, "Lançamentos_fora": 21.08, "Alívios_casa": 31.1, "Posse de bola_casa": 48.0, "Faltas_fora": 14.42, "Passes longos_fora": 53.96, "Posse de bola_fora": 46.08, "Lançamentos_casa": 19.6, "Alívios_fora": 30.88, "Desarmes_casa": 15.4, "Passes longos_casa": 49.3, "Faltas_casa": 15.2}, "Rio Ave": {"Desarmes_fora": 16.96, "Interceções_casa": 9.62, "Cruzamentos_casa": 14.75, "Interceções_fora": 9.5, "Cruzamentos_fora": 17.04, "Lançamentos_fora": 18.58, "Alívios_casa": 22.5, "Posse de bola_casa": 50.0, "Faltas_fora": 14.38, "Passes longos_fora": 50.58, "Posse de bola_fora": 48.88, "Lançamentos_casa": 18.5, "Alívios_fora": 29.54, "Desarmes_casa": 19.5, "Passes longos_casa": 46.12, "Faltas_casa": 12.75}, "Santa Clara": {"Desarmes_fora": 14.71, "Interceções_casa": 8.5, "Cruzamentos_casa": 17.67, "Interceções_fora": 8.11, "Cruzamentos_fora": 16.75, "Lançamentos_fora": 21.04, "Alívios_casa": 30.5, "Posse de bola_casa": 47.0, "Faltas_fora": 13.54, "Passes longos_fora": 51.71, "Posse de bola_fora": 49.18, "Lançamentos_casa": 20.17, "Alívios_fora": 29.14, "Desarmes_casa": 18.33, "Passes longos_casa": 49.0, "Faltas_casa": 15.67}, "Sporting Cp": {"Desarmes_fora": 15.77, "Interceções_casa": 9.5, "Cruzamentos_casa": 14.75, "Interceções_fora": 7.93, "Cruzamentos_fora": 13.93, "Lançamentos_fora": 15.7, "Alívios_casa": 19.75, "Posse de bola_casa": 48.5, "Faltas_fora": 12.67, "Passes longos_fora": 43.73, "Posse de bola_fora": 51.07, "Lançamentos_casa": 14.75, "Alívios_fora": 21.8, "Desarmes_casa": 20.25, "Passes longos_casa": 39.5, "Faltas_casa": 14.0}, "Tondela": {"Desarmes_fora": 15.28, "Interceções_casa": 6.5, "Cruzamentos_casa": 18.5, "Interceções_fora": 8.0, "Cruzamentos_fora": 19.94, "Lançamentos_fora": 19.19, "Alívios_casa": 22.0, "Posse de bola_casa": 50.5, "Faltas_fora": 13.56, "Passes longos_fora": 50.97, "Posse de bola_fora": 48.94, "Lançamentos_casa": 18.0, "Alívios_fora": 26.09, "Desarmes_casa": 17.5, "Passes longos_casa": 56.0, "Faltas_casa": 14.0}, "Vitoria Guimaraes": {"Alívios_casa": 23.0, "Passes longos_casa": 50.0, "Cruzamentos_casa": 18.0, "Posse de bola_casa": 49.0, "Lançamentos_casa": 20.0, "Faltas_casa": 14.5, "Interceções_casa": 8.5, "Desarmes_casa": 16.0, "Alívios_fora": 24.09, "Passes longos_fora": 50.0, "Cruzamentos_fora": 17.0, "Posse de bola_fora": 51.24, "Lançamentos_fora": 20.85, "Faltas_fora": 13.91, "Interceções_fora": 8.21, "Desarmes_fora": 16.0}}}, "BRA": {"coef": [0.4137449632896206, 0.2917933586367558, -0.31324887101778376, -0.2603984967279172, 2.5410185759996624, -0.4963015462175354, 0.06929315030001237, -0.08130066730100075, 0.8952098991491833, 0.08360297936001618, -0.7077567854127498, 0.11135623169004329, 1.7942055644951918, 0.04906020034587312, -0.28028352362442055, 0.11364094025574825], "intercept": 36.90196078431367, "scaler_mean": [22.29577309198128, 45.19740208929219, 21.170073127937865, 50.992873459201334, 18.504390125072067, 13.174777452459113, 7.877054515073551, 15.833365231462134, 26.159457310545832, 47.2585691512234, 15.878920166456234, 48.89363437141702, 18.335177840923212, 13.385826380463062, 8.014925246802411, 15.308452235960889], "scaler_scale": [1.7527266964414514, 2.7615136839855, 2.15541081441864, 1.7359388249375283, 1.9062762376596905, 2.143629548345517, 1.3062712899390758, 3.051395525571225, 2.220029970915846, 2.830281860694222, 1.280455090986719, 1.8253514543961524, 1.0469674293858786, 1.8435046510750481, 1.1527091195897492, 3.413517131716205], "feat_cols": ["H_Alívios_casa", "H_Passes longos_casa", "H_Cruzamentos_casa", "H_Posse de bola_casa", "H_Lançamentos_casa", "H_Faltas_fora", "H_Interceções_fora", "H_Desarmes_fora", "A_Alívios_fora", "A_Passes longos_fora", "A_Cruzamentos_fora", "A_Posse de bola_fora", "A_Lançamentos_fora", "A_Faltas_casa", "A_Interceções_casa", "A_Desarmes_casa"], "std_resid": 7.619111491659141, "mu_global": 36.90196078431372, "mae_cv": 6.605668239179488, "r2": 0.16205887798577878, "teams": {"Atletico Mg": {"Alívios_fora": 0, "Desarmes_casa": 16.21, "Posse de bola_fora": 0, "Interceções_casa": 8.79, "Cruzamentos_fora": 0, "Cruzamentos_casa": 19.05, "Alívios_casa": 22.89, "Posse de bola_casa": 50.74, "Lançamentos_casa": 17.24, "Faltas_casa": 14.26, "Faltas_fora": 0, "Passes longos_casa": 46.5, "Lançamentos_fora": 0, "Interceções_fora": 0, "Desarmes_fora": 0, "Passes longos_fora": 0}, "Bahia": {"Alívios_fora": 31.5, "Desarmes_casa": 16.39, "Posse de bola_fora": 46.0, "Interceções_casa": 7.72, "Cruzamentos_fora": 14.0, "Cruzamentos_casa": 20.44, "Alívios_casa": 19.39, "Posse de bola_casa": 51.64, "Lançamentos_casa": 16.03, "Faltas_casa": 13.31, "Faltas_fora": 9.5, "Passes longos_casa": 41.53, "Lançamentos_fora": 17.0, "Interceções_fora": 5.5, "Desarmes_fora": 22.0, "Passes longos_fora": 41.0}, "Botafogo Rj": {"Alívios_fora": 22.75, "Desarmes_casa": 14.88, "Posse de bola_fora": 53.5, "Interceções_casa": 7.97, "Cruzamentos_fora": 18.75, "Cruzamentos_casa": 20.79, "Alívios_casa": 21.76, "Posse de bola_casa": 51.56, "Lançamentos_casa": 15.94, "Faltas_casa": 12.94, "Faltas_fora": 10.25, "Passes longos_casa": 48.21, "Lançamentos_fora": 18.5, "Interceções_fora": 8.0, "Desarmes_fora": 9.75, "Passes longos_fora": 50.5}, "Bragantino": {"Alívios_fora": 18.0, "Desarmes_casa": 15.62, "Posse de bola_fora": 49.83, "Interceções_casa": 7.09, "Cruzamentos_fora": 14.17, "Cruzamentos_casa": 21.97, "Alívios_casa": 23.75, "Posse de bola_casa": 51.16, "Lançamentos_casa": 20.91, "Faltas_casa": 14.12, "Faltas_fora": 13.33, "Passes longos_casa": 49.22, "Lançamentos_fora": 20.0, "Interceções_fora": 7.17, "Desarmes_fora": 17.33, "Passes longos_fora": 47.33}, "Ceara": {"Alívios_fora": 27.38, "Desarmes_casa": 15.27, "Posse de bola_fora": 48.62, "Interceções_casa": 6.73, "Cruzamentos_fora": 16.75, "Cruzamentos_casa": 24.33, "Alívios_casa": 24.0, "Posse de bola_casa": 51.53, "Lançamentos_casa": 17.4, "Faltas_casa": 13.1, "Faltas_fora": 14.0, "Passes longos_casa": 45.2, "Lançamentos_fora": 15.12, "Interceções_fora": 6.88, "Desarmes_fora": 14.5, "Passes longos_fora": 48.75}, "Corinthians": {"Alívios_fora": 30.4, "Desarmes_casa": 16.61, "Posse de bola_fora": 42.0, "Interceções_casa": 8.57, "Cruzamentos_fora": 13.2, "Cruzamentos_casa": 17.57, "Alívios_casa": 21.79, "Posse de bola_casa": 49.93, "Lançamentos_casa": 20.11, "Faltas_casa": 15.82, "Faltas_fora": 17.0, "Passes longos_casa": 45.14, "Lançamentos_fora": 17.7, "Interceções_fora": 10.0, "Desarmes_fora": 15.5, "Passes longos_fora": 45.6}, "Cruzeiro": {"Alívios_fora": 27.08, "Desarmes_casa": 17.42, "Posse de bola_fora": 48.92, "Interceções_casa": 9.31, "Cruzamentos_fora": 16.92, "Cruzamentos_casa": 22.62, "Alívios_casa": 23.96, "Posse de bola_casa": 50.12, "Lançamentos_casa": 20.15, "Faltas_casa": 15.0, "Faltas_fora": 13.0, "Passes longos_casa": 48.46, "Lançamentos_fora": 18.67, "Interceções_fora": 8.92, "Desarmes_fora": 15.5, "Passes longos_fora": 50.33}, "Ec Juventude": {"Alívios_fora": 23.79, "Desarmes_casa": 18.29, "Posse de bola_fora": 48.71, "Interceções_casa": 8.04, "Cruzamentos_fora": 15.21, "Cruzamentos_casa": 19.71, "Alívios_casa": 22.08, "Posse de bola_casa": 49.33, "Lançamentos_casa": 19.83, "Faltas_casa": 14.58, "Faltas_fora": 15.93, "Passes longos_casa": 44.04, "Lançamentos_fora": 18.79, "Interceções_fora": 10.14, "Desarmes_fora": 14.93, "Passes longos_fora": 52.71}, "Flamengo Rj": {"Alívios_fora": 20.06, "Desarmes_casa": 15.36, "Posse de bola_fora": 50.25, "Interceções_casa": 7.68, "Cruzamentos_fora": 15.31, "Cruzamentos_casa": 17.41, "Alívios_casa": 23.09, "Posse de bola_casa": 49.95, "Lançamentos_casa": 15.64, "Faltas_casa": 13.14, "Faltas_fora": 14.0, "Passes longos_casa": 42.5, "Lançamentos_fora": 16.69, "Interceções_fora": 7.19, "Desarmes_fora": 15.25, "Passes longos_fora": 44.75}, "Fluminense": {"Alívios_fora": 24.22, "Desarmes_casa": 16.9, "Posse de bola_fora": 49.17, "Interceções_casa": 8.55, "Cruzamentos_fora": 13.89, "Cruzamentos_casa": 19.9, "Alívios_casa": 20.15, "Posse de bola_casa": 50.75, "Lançamentos_casa": 18.3, "Faltas_casa": 13.7, "Faltas_fora": 13.0, "Passes longos_casa": 43.75, "Lançamentos_fora": 17.94, "Interceções_fora": 7.44, "Desarmes_fora": 15.72, "Passes longos_fora": 44.5}, "Fortaleza": {"Alívios_fora": 24.3, "Desarmes_casa": 15.89, "Posse de bola_fora": 49.95, "Interceções_casa": 7.28, "Cruzamentos_fora": 16.8, "Cruzamentos_casa": 25.5, "Alívios_casa": 21.22, "Posse de bola_casa": 55.44, "Lançamentos_casa": 18.61, "Faltas_casa": 14.44, "Faltas_fora": 12.35, "Passes longos_casa": 43.39, "Lançamentos_fora": 18.85, "Interceções_fora": 7.9, "Desarmes_fora": 13.35, "Passes longos_fora": 51.35}, "Gremio": {"Alívios_fora": 26.55, "Desarmes_casa": 17.12, "Posse de bola_fora": 50.32, "Interceções_casa": 8.62, "Cruzamentos_fora": 16.23, "Cruzamentos_casa": 21.81, "Alívios_casa": 21.69, "Posse de bola_casa": 50.94, "Lançamentos_casa": 19.56, "Faltas_casa": 13.38, "Faltas_fora": 14.0, "Passes longos_casa": 41.56, "Lançamentos_fora": 16.55, "Interceções_fora": 8.45, "Desarmes_fora": 17.0, "Passes longos_fora": 49.5}, "Internacional": {"Alívios_fora": 27.17, "Desarmes_casa": 18.14, "Posse de bola_fora": 48.62, "Interceções_casa": 8.36, "Cruzamentos_fora": 14.0, "Cruzamentos_casa": 22.07, "Alívios_casa": 21.93, "Posse de bola_casa": 53.71, "Lançamentos_casa": 20.86, "Faltas_casa": 14.0, "Faltas_fora": 12.75, "Passes longos_casa": 48.21, "Lançamentos_fora": 19.71, "Interceções_fora": 7.58, "Desarmes_fora": 18.33, "Passes longos_fora": 48.75}, "Mirassol": {"Alívios_fora": 28.77, "Desarmes_casa": 15.58, "Posse de bola_fora": 49.85, "Interceções_casa": 7.58, "Cruzamentos_fora": 18.12, "Cruzamentos_casa": 22.08, "Alívios_casa": 26.25, "Posse de bola_casa": 45.17, "Lançamentos_casa": 19.58, "Faltas_casa": 13.5, "Faltas_fora": 12.69, "Passes longos_casa": 43.08, "Lançamentos_fora": 18.92, "Interceções_fora": 8.73, "Desarmes_fora": 16.42, "Passes longos_fora": 45.12}, "Palmeiras": {"Alívios_fora": 27.43, "Desarmes_casa": 19.8, "Posse de bola_fora": 46.18, "Interceções_casa": 6.0, "Cruzamentos_fora": 14.54, "Cruzamentos_casa": 22.1, "Alívios_casa": 25.1, "Posse de bola_casa": 51.9, "Lançamentos_casa": 19.7, "Faltas_casa": 12.4, "Faltas_fora": 15.57, "Passes longos_casa": 49.5, "Lançamentos_fora": 17.57, "Interceções_fora": 7.61, "Desarmes_fora": 17.29, "Passes longos_fora": 51.93}, "Santos": {"Alívios_fora": 28.07, "Desarmes_casa": 15.75, "Posse de bola_fora": 48.0, "Interceções_casa": 10.25, "Cruzamentos_fora": 15.3, "Cruzamentos_casa": 21.0, "Alívios_casa": 22.75, "Posse de bola_casa": 50.38, "Lançamentos_casa": 19.62, "Faltas_casa": 14.62, "Faltas_fora": 14.73, "Passes longos_casa": 42.25, "Lançamentos_fora": 18.5, "Interceções_fora": 8.3, "Desarmes_fora": 17.03, "Passes longos_fora": 44.4}, "Sao Paulo": {"Alívios_fora": 26.09, "Desarmes_casa": 16.17, "Posse de bola_fora": 48.31, "Interceções_casa": 8.67, "Cruzamentos_fora": 16.72, "Cruzamentos_casa": 21.67, "Alívios_casa": 18.33, "Posse de bola_casa": 50.83, "Lançamentos_casa": 20.83, "Faltas_casa": 15.83, "Faltas_fora": 14.38, "Passes longos_casa": 42.5, "Lançamentos_fora": 19.16, "Interceções_fora": 8.59, "Desarmes_fora": 15.12, "Passes longos_fora": 47.09}, "Sport Recife": {"Alívios_fora": 26.47, "Desarmes_casa": 12.75, "Posse de bola_fora": 51.68, "Interceções_casa": 8.5, "Cruzamentos_fora": 16.82, "Cruzamentos_casa": 24.5, "Alívios_casa": 25.5, "Posse de bola_casa": 52.25, "Lançamentos_casa": 15.75, "Faltas_casa": 12.75, "Faltas_fora": 13.03, "Passes longos_casa": 42.75, "Lançamentos_fora": 19.47, "Interceções_fora": 8.44, "Desarmes_fora": 15.38, "Passes longos_fora": 45.26}, "Vasco": {"Alívios_fora": 25.58, "Desarmes_casa": 7.0, "Posse de bola_fora": 48.36, "Interceções_casa": 6.5, "Cruzamentos_fora": 16.31, "Cruzamentos_casa": 27.0, "Alívios_casa": 23.0, "Posse de bola_casa": 55.0, "Lançamentos_casa": 22.0, "Faltas_casa": 9.0, "Faltas_fora": 12.53, "Passes longos_casa": 38.0, "Lançamentos_fora": 17.58, "Interceções_fora": 8.19, "Desarmes_fora": 14.67, "Passes longos_fora": 44.56}}}};
+
+// ─────────────────────────────────────────────────────────────
+// Estado
+// ─────────────────────────────────────────────────────────────
+let ligaAtual = 'PL';
+
+// ─────────────────────────────────────────────────────────────
+// Normal CDF (approx Abramowitz & Stegun)
+// ─────────────────────────────────────────────────────────────
+function normCDF(x) {
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x) / Math.sqrt(2);
+  const t = 1.0/(1.0 + p*x);
+  const y = 1.0 - (((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return 0.5*(1.0 + sign*y);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Predição
+// ─────────────────────────────────────────────────────────────
+function predict(liga, homeTeam, awayTeam) {
+  const m = MODELS[liga];
+  const hData = m.teams[homeTeam];
+  const aData = m.teams[awayTeam];
+
+  // Mapeamento feat_col → valor
+  const featMap = {
+    'H_Alívios_casa':       hData['Alívios_casa']       || m.scaler_mean[0],
+    'H_Passes longos_casa': hData['Passes longos_casa'] || m.scaler_mean[1],
+    'H_Cruzamentos_casa':   hData['Cruzamentos_casa']   || m.scaler_mean[2],
+    'H_Posse de bola_casa': hData['Posse de bola_casa'] || m.scaler_mean[3],
+    'H_Lançamentos_casa':   hData['Lançamentos_casa']   || m.scaler_mean[4],
+    'H_Faltas_fora':        hData['Faltas_fora']        || m.scaler_mean[5],
+    'H_Interceções_fora':   hData['Interceções_fora']   || m.scaler_mean[6],
+    'H_Desarmes_fora':      hData['Desarmes_fora']      || m.scaler_mean[7],
+    'A_Alívios_fora':       aData['Alívios_fora']       || m.scaler_mean[8],
+    'A_Passes longos_fora': aData['Passes longos_fora'] || m.scaler_mean[9],
+    'A_Cruzamentos_fora':   aData['Cruzamentos_fora']   || m.scaler_mean[10],
+    'A_Posse de bola_fora': aData['Posse de bola_fora'] || m.scaler_mean[11],
+    'A_Lançamentos_fora':   aData['Lançamentos_fora']   || m.scaler_mean[12],
+    'A_Faltas_casa':        aData['Faltas_casa']        || m.scaler_mean[13],
+    'A_Interceções_casa':   aData['Interceções_casa']   || m.scaler_mean[14],
+    'A_Desarmes_casa':      aData['Desarmes_casa']      || m.scaler_mean[15],
+  };
+
+  let pred = m.intercept;
+  m.feat_cols.forEach((fc, i) => {
+    const raw = featMap[fc] || m.scaler_mean[i];
+    const scaled = (raw - m.scaler_mean[i]) / m.scaler_scale[i];
+    pred += m.coef[i] * scaled;
+  });
+  return Math.max(pred, 15);
+}
+
+// ─────────────────────────────────────────────────────────────
+// UI — poblar equipas
+// ─────────────────────────────────────────────────────────────
+function updateTeams() {
+  const teams = Object.keys(MODELS[ligaAtual].teams).sort();
+  const home = document.getElementById('selHome');
+  const away = document.getElementById('selAway');
+  home.innerHTML = teams.map(t => `<option>${t}</option>`).join('');
+  away.innerHTML = teams.map(t => `<option>${t}</option>`).join('');
+  if (teams.length > 1) away.selectedIndex = 1;
+  document.getElementById('result').style.display = 'none';
+}
+
+document.querySelectorAll('.liga-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.liga-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    ligaAtual = btn.dataset.liga;
+    updateTeams();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Calcular
+// ─────────────────────────────────────────────────────────────
+function calcular() {
+  const home   = document.getElementById('selHome').value;
+  const away   = document.getElementById('selAway').value;
+  const linha  = parseFloat(document.getElementById('inpLinha').value);
+  const odd    = parseFloat(document.getElementById('inpOdd').value);
+  const bookie = document.getElementById('selBookie').value;
+  const m      = MODELS[ligaAtual];
+
+  if (home === away) { alert('Escolhe equipas diferentes!'); return; }
+  if (!linha || linha <= 0) { alert('Insere a linha!'); return; }
+
+  const pred = predict(ligaAtual, home, away);
+  const std  = m.std_resid;
+  const diff = pred - linha;
+
+  // IC
+  const ic68lo = pred - std,       ic68hi = pred + std;
+  const ic90lo = pred - 1.645*std, ic90hi = pred + 1.645*std;
+
+  // Probabilidades
+  const pOver  = (1 - normCDF((linha - pred) / std)) * 100;
+  const pUnder = 100 - pOver;
+
+  // Odd justa & value
+  const oddJusta = pOver > 0 ? (100 / pOver).toFixed(2) : '—';
+  const value = !isNaN(odd) && pOver > 0 ? ((odd * pOver/100 - 1)*100).toFixed(1) : null;
+
+  // Signal
+  let signal, sigClass;
+  if (diff > 4)       { signal = '🟢 OVER FORTE';        sigClass = 'sig-over-forte'; }
+  else if (diff > 2)  { signal = '🟡 OVER MODERADO';     sigClass = 'sig-over-mod'; }
+  else if (diff < -4) { signal = '🔴 UNDER FORTE';       sigClass = 'sig-under-forte'; }
+  else if (diff < -2) { signal = '🟠 UNDER MODERADO';    sigClass = 'sig-under-mod'; }
+  else                { signal = '⚪ SEM EDGE';           sigClass = 'sig-neutro'; }
+
+  // ── Preencher UI ──────────────────────────────────────────
+  document.getElementById('rMatchup').innerHTML =
+    `<span>${home}</span> 🏠 vs ✈ <span>${away}</span>`;
+  document.getElementById('rSignal').innerHTML =
+    `<span class="signal-badge ${sigClass}">${signal}</span>`;
+  document.getElementById('rBookie').textContent = `${bookie} · Linha ${linha} · Over @${odd || '—'}`;
+
+  document.getElementById('rPred').textContent  = pred.toFixed(1);
+  document.getElementById('rPred').style.color  = diff > 2 ? 'var(--green)' : diff < -2 ? 'var(--red)' : 'var(--text)';
+  document.getElementById('rLinha').textContent = linha.toFixed(1);
+  document.getElementById('rDiff').textContent  = `${diff >= 0 ? '+' : ''}${diff.toFixed(1)} vs linha`;
+  document.getElementById('rMedia').textContent = m.mu_global.toFixed(1);
+
+  // Prob bars
+  document.getElementById('pOver').textContent   = pOver.toFixed(1) + '%';
+  document.getElementById('pUnder').textContent  = pUnder.toFixed(1) + '%';
+  setTimeout(() => {
+    document.getElementById('barOver').style.width  = Math.min(pOver,100) + '%';
+    document.getElementById('barUnder').style.width = Math.min(pUnder,100) + '%';
+  }, 50);
+
+  // IC
+  document.getElementById('ic68').textContent = `${ic68lo.toFixed(0)} – ${ic68hi.toFixed(0)}`;
+  document.getElementById('ic90').textContent = `${ic90lo.toFixed(0)} – ${ic90hi.toFixed(0)}`;
+  document.getElementById('rOddJusta').textContent = oddJusta;
+  if (value !== null) {
+    const vNum = parseFloat(value);
+    document.getElementById('rValue').textContent = (vNum >= 0 ? '+' : '') + value + '%';
+    document.getElementById('rValue').style.color = vNum >= 5 ? 'var(--green)' : vNum >= 0 ? 'var(--yellow)' : 'var(--red)';
+  } else {
+    document.getElementById('rValue').textContent = '—';
+  }
+
+  // Teams stats
+  const hData = m.teams[home];
+  const aData = m.teams[away];
+  document.getElementById('rHomeName').textContent = `🏠 ${home} (casa)`;
+  document.getElementById('rAwayName').textContent = `✈ ${away} (fora)`;
+
+  const hStats = [
+    ['Lançamentos/j', hData['Lançamentos_casa']?.toFixed(1)],
+    ['Passes longos', hData['Passes longos_casa']?.toFixed(1)],
+    ['Alívios',       hData['Alívios_casa']?.toFixed(1)],
+    ['Posse de bola', hData['Posse de bola_casa']?.toFixed(1) + '%'],
+    ['Cruzamentos',   hData['Cruzamentos_casa']?.toFixed(1)],
+    ['Faltas sofridas',hData['Faltas_fora']?.toFixed(1)],
+  ];
+  const aStats = [
+    ['Lançamentos/j', aData['Lançamentos_fora']?.toFixed(1)],
+    ['Passes longos', aData['Passes longos_fora']?.toFixed(1)],
+    ['Alívios',       aData['Alívios_fora']?.toFixed(1)],
+    ['Posse de bola', aData['Posse de bola_fora']?.toFixed(1) + '%'],
+    ['Cruzamentos',   aData['Cruzamentos_fora']?.toFixed(1)],
+    ['Faltas sofridas',aData['Faltas_casa']?.toFixed(1)],
+  ];
+
+  document.getElementById('rHomeStats').innerHTML = hStats.map(([l,v]) =>
+    `<div class="team-stat"><span>${l}</span><span class="team-stat-val">${v||'—'}</span></div>`).join('');
+  document.getElementById('rAwayStats').innerHTML = aStats.map(([l,v]) =>
+    `<div class="team-stat"><span>${l}</span><span class="team-stat-val">${v||'—'}</span></div>`).join('');
+
+  // Info modelo
+  document.getElementById('infoR2').textContent  = `R² ${m.r2.toFixed(3)}`;
+  document.getElementById('infoMAE').textContent = `MAE ${m.mae_cv.toFixed(2)}`;
+  document.getElementById('infoSigma').textContent = `σ ${m.std_resid.toFixed(2)}`;
+  document.getElementById('infoN').textContent   = ligaAtual === 'PL' ? 'N 380' : ligaAtual === 'PPL' ? 'N 308' : 'N 380';
+
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('result').scrollIntoView({behavior:'smooth', block:'start'});
+
+  // Guardar estado para botão Registar
+  ultimoCalculo = {
+    liga: ligaAtual, home, away, pred: parseFloat(pred.toFixed(1)),
+    linha, diff: parseFloat(diff.toFixed(1)), signal,
+    pOver: parseFloat(pOver.toFixed(1)), pUnder: parseFloat(pUnder.toFixed(1)),
+    odd: isNaN(odd) ? '' : odd,
+    oddJusta: (pOver > 0 ? (100/pOver).toFixed(2) : ''),
+    value: value !== null ? value : '',
+    bookie,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Estado do último cálculo (para registar)
+// ─────────────────────────────────────────────────────────────
+let ultimoCalculo = null;
+
+// ─────────────────────────────────────────────────────────────
+// localStorage — registo de entradas
+// ─────────────────────────────────────────────────────────────
+const STORE_KEY = 'lancamentos_entradas_v1';
+
+function carregarEntradas() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); }
+  catch { return []; }
+}
+function guardarEntradas(arr) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(arr));
+}
+
+// ─────────────────────────────────────────────────────────────
+// Registar entrada atual
+// ─────────────────────────────────────────────────────────────
+function registarEntrada() {
+  if (!ultimoCalculo) return;
+  const entradas = carregarEntradas();
+  const now = new Date();
+  const entrada = {
+    id:        Date.now(),
+    data:      now.toLocaleDateString('pt-PT'),
+    hora:      now.toLocaleTimeString('pt-PT', {hour:'2-digit', minute:'2-digit'}),
+    liga:      ultimoCalculo.liga,
+    casa:      ultimoCalculo.home,
+    fora:      ultimoCalculo.away,
+    modelo:    ultimoCalculo.pred,
+    linha:     ultimoCalculo.linha,
+    diff:      parseFloat((ultimoCalculo.pred - ultimoCalculo.linha).toFixed(1)),
+    signal:    ultimoCalculo.signal,
+    pOver:     ultimoCalculo.pOver,
+    pUnder:    ultimoCalculo.pUnder,
+    odd:       ultimoCalculo.odd || '',
+    oddJusta:  ultimoCalculo.oddJusta || '',
+    value:     ultimoCalculo.value || '',
+    bookie:    ultimoCalculo.bookie,
+    resultado: 'Aberta',
+  };
+  entradas.unshift(entrada);
+  guardarEntradas(entradas);
+  registarEntradaFeedback();
+}
+
+// feedback botão registar
+function registarEntradaFeedback() {
+  const btn = document.getElementById('btnRegistar');
+  btn.textContent = '✅ Registado!';
+  btn.disabled = true;
+  setTimeout(() => { btn.textContent = '📝 Registar Entrada'; btn.disabled = false; }, 2000);
+}
+
+// init
+updateTeams();
+</script>
+</body>
+</html>
