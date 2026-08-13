@@ -1580,6 +1580,100 @@ def collect_live_once():
 # Job live — adicionado depois de collect_live_once estar definida (v2)
 scheduler.add_job(collect_live_once, 'interval', seconds=30, id='live_collect')
 
+# ── Auto-loader diário de jogos (Flashscore) ──────────────────────────────────
+_AUTO_LOADER_LEAGUES = [
+    {'code': 'PPL', 'url': 'https://www.flashscore.pt/futebol/portugal/liga-portugal-betclic/'},
+    {'code': 'ESP', 'url': 'https://www.flashscore.com/football/spain/laliga/'},
+    {'code': 'BRA', 'url': 'https://www.flashscore.com/football/brazil/serie-a/'},
+]
+
+def auto_load_daily_games():
+    """Detecta automaticamente os jogos do dia via Flashscore e popula live_games DB.
+    Corre no arranque e às 09:00 UTC. Não sobrescreve registos existentes (INSERT OR IGNORE).
+    AB=3 = por começar, AB=1 = live, AB=2 = terminado (ignorado).
+    """
+    import time as _t
+    GBOT_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+    now         = _t.time()
+    today_start = now - 7200     # até 2h atrás (jogo já começou mas app reiniciou)
+    today_end   = now + 86400    # próximas 24h
+
+    if not LIVE_DB_PATH.exists():
+        logger.warning('[AUTO] live DB não existe ainda, a aguardar...')
+        return
+
+    con = init_live_db()
+    total = 0
+
+    for league in _AUTO_LOADER_LEAGUES:
+        code = league['code']
+        url  = league['url']
+        try:
+            html = _arb_fetch(url, ua=GBOT_UA)
+            if not html or len(html) < 5000:
+                logger.warning(f'[AUTO] {code}: feed insuficiente ({len(html or "")} bytes)')
+                continue
+
+            found = 0
+            for rec in _FS_MATCH_RE.finditer(html):
+                mid    = rec.group(1)
+                fields = {kv.group(1): kv.group(2).strip()
+                          for kv in _FS_FIELD_RE.finditer(rec.group(2))}
+
+                if fields.get('AB', '') == '2':
+                    continue  # terminado — ignorar
+
+                ts = int(fields.get('AD', '0') or '0')
+                if not ts or not (today_start <= ts <= today_end):
+                    continue  # fora da janela do dia
+
+                home = _arb_strip_tags(fields.get('CX', '')).strip()
+                away = _arb_strip_tags(fields.get('AF', '')).strip()
+                if not home or not away or len(home) < 2 or len(away) < 2:
+                    continue
+
+                kickoff = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+
+                # Baselines: médias das equipas ou default da liga
+                hn = _norm_nome(home); an = _norm_nome(away)
+                hd = _MEDIAS.get(hn, {})
+                ad_m = _MEDIAS.get(an, {})
+                # Fuzzy match por palavras se não encontrado exact
+                if not hd:
+                    hw = {w for w in hn.split() if len(w) > 3}
+                    for k, v in _MEDIAS.items():
+                        if v.get('liga') == code and hw & {w for w in k.split() if len(w) > 3}:
+                            hd = v; break
+                if not ad_m:
+                    aw = {w for w in an.split() if len(w) > 3}
+                    for k, v in _MEDIAS.items():
+                        if v.get('liga') == code and aw & {w for w in k.split() if len(w) > 3}:
+                            ad_m = v; break
+
+                lh = hd.get('lanc_media') or 0;  la = ad_m.get('lanc_media') or 0
+                fh = hd.get('faltas_media') or 0; fa = ad_m.get('faltas_media') or 0
+                lb = round((lh + la) / 2, 1) if (lh or la) else _LANC_BASE.get(code, 37.0)
+                fb = round((fh + fa) / 2, 1) if (fh or fa) else _FALTAS_BASE.get(code, 27.0)
+
+                cur = con.execute(
+                    '''INSERT OR IGNORE INTO live_games
+                       (flash_mid,league,home,away,kickoff,
+                        lanc_baseline,faltas_baseline,status,bet_ci,referee,statscore_id)
+                       VALUES (?,?,?,?,?,?,?,'pending',NULL,NULL,NULL)''',
+                    (mid, code, home, away, kickoff, lb, fb))
+                if cur.rowcount:
+                    logger.info(f'[AUTO] {code}: {home} vs {away} '
+                                f'@ {kickoff[:16]}Z mid={mid} L={lb} F={fb}')
+                    found += 1; total += 1
+
+            con.commit()
+            logger.info(f'[AUTO] {code}: {found} jogos novos adicionados')
+        except Exception as e:
+            logger.warning(f'[AUTO] {code}: erro — {e}')
+
+    con.close()
+    logger.info(f'[AUTO] total {total} jogos novos detectados')
+
 # ── Live DB ───────────────────────────────────────────────────────────────────
 def init_live_db():
     con = sqlite3.connect(LIVE_DB_PATH)
@@ -2068,6 +2162,18 @@ def admin_collect_now():
         collect_live_once()
         snaps = ler_latest_snaps()
         return jsonify({'ok': True, 'snaps': {k: {kk: v for kk,v in vv.items() if kk in ('minuto_est','lanc_pred','faltas_pred','live_line','fl_live_line','live_signal','fl_live_signal','captured_at')} for k,vv in snaps.items()}})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/reload-games', methods=['POST'])
+def admin_reload_games():
+    """Força execução imediata do auto_load_daily_games. Body: {token}"""
+    data = request.get_json(force=True, silent=True) or {}
+    if data.get('token') != LIVE_TOKEN:
+        return jsonify({'error': 'unauthorized'}), 401
+    try:
+        auto_load_daily_games()
+        return jsonify({'ok': True, 'msg': 'auto_load_daily_games executado'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -3111,6 +3217,10 @@ def live_historico_page():
 # ── Registar job de árbitros (função já definida acima) ───────────────────────
 scheduler.add_job(_fetch_arbitros_auto, 'interval', hours=1, id='arbitros',
                   next_run_time=datetime.now())   # primeiro fetch imediato no arranque
+
+# ── Registar auto-loader diário de jogos ──────────────────────────────────────
+scheduler.add_job(auto_load_daily_games, 'cron', hour=9, minute=0, id='auto_load',
+                  next_run_time=datetime.now())   # corre imediatamente no arranque
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
