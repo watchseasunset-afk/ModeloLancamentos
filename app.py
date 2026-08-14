@@ -1012,14 +1012,18 @@ def _fetch_ninja(flash_mid):
             if mm: return float(mm.group(2))
             try: return float(v.replace('%',''))
             except: return None
+        _LANC_NAMES  = {'Lançamentos', 'Throw-ins', 'Throw Ins', 'Lanzamientos'}
+        _FALT_NAMES  = {'Faltas', 'Fouls', 'Fouls committed', 'Faltas cometidas'}
         for m in _STAT_RE.finditer(raw):
             name = m.group(1).strip()
-            if name == 'Lançamentos':
+            if name in _LANC_NAMES:
                 stats['lanc_casa'] = pv(m.group(2))
                 stats['lanc_fora'] = pv(m.group(3))
-            elif name == 'Faltas':
+            elif name in _FALT_NAMES:
                 stats['faltas_casa'] = pv(m.group(2))
                 stats['faltas_fora'] = pv(m.group(3))
+        if stats:
+            logger.debug(f'[NINJA] {flash_mid}: {stats}')
         return stats
     except Exception as e:
         logger.warning(f'[NINJA] {flash_mid}: {e}')
@@ -1403,9 +1407,9 @@ def collect_live_once():
     Inclui jogos até 2h antes do kickoff (pré-jogo) para mostrar linhas 22bet antecipadamente."""
     now = datetime.now(timezone.utc)
     con = init_live_db()
-    window_start = (now - timedelta(minutes=115)).isoformat()
+    window_start = (now - timedelta(minutes=130)).isoformat()
     window_end   = (now + timedelta(hours=3)).isoformat()   # pré-jogo até 3h antes
-    # Limpar jogos terminados (kickoff > 115 min passados) — sempre, antes do return
+    # Limpar jogos terminados (kickoff > 130 min passados) — sempre, antes do return
     con.execute("UPDATE live_games SET status='done' WHERE status='live' AND kickoff <= ?",
                 (window_start,))
     con.commit()
@@ -2638,6 +2642,25 @@ def admin_arbitros_push():
 def admin_arbitros_status():
     return jsonify({'total': len(_REFEREE_OVERRIDES),
                     'arbitros': [{'key': k, 'ref': v} for k,v in _REFEREE_OVERRIDES.items()]})
+
+@app.route('/debug/ninja')
+def debug_ninja():
+    """Testa o _fetch_ninja para um flash_mid. Ex: /debug/ninja?mid=hpkd2WE4"""
+    mid = request.args.get('mid', '')
+    if not mid:
+        return jsonify({'error': 'mid em falta'})
+    try:
+        req = urllib.request.Request(_NINJA_URL.format(mid=mid), headers=_FS_HDR)
+        with urllib.request.urlopen(req, timeout=12) as r:
+            raw = r.read().decode('utf-8', errors='replace')
+        stats = _fetch_ninja(mid)
+        # Extract all stat names found
+        all_stats = []
+        for m in _STAT_RE.finditer(raw):
+            all_stats.append({'name': m.group(1).strip(), 'home': m.group(2).strip(), 'away': m.group(3).strip()})
+        return jsonify({'mid': mid, 'parsed': stats, 'all_stats': all_stats, 'raw_len': len(raw)})
+    except Exception as e:
+        return jsonify({'mid': mid, 'error': str(e)})
 
 @app.route('/debug/arbitro')
 def debug_arbitro():
