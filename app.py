@@ -141,6 +141,7 @@ _load_arbitros() # carregar árbitros no arranque
 
 # Aliases Excel Lancamentos → chave canónica em _MEDIAS (model_data.json)
 _LANC_ALIASES = {
+    'afs':                   'avs',         # Excel usa 'Afs', model_data usa 'AVS'
     'fc porto':              'porto',
     'sporting cp':           'sp lisbon',
     'estrela da amadora':    'estrela',
@@ -177,12 +178,17 @@ def _load_lanc_medias():
         try:
             import importlib
             pd = importlib.import_module('pandas')
-            df = pd.read_excel(str(p))
+            # ler todas as sheets "Geral" e concatenar (evita ler só a 1ª sheet)
+            _xl = pd.ExcelFile(str(p))
+            _dfs = [pd.read_excel(str(p), sheet_name=s)
+                    for s in _xl.sheet_names if 'Geral' in s]
+            df = pd.concat(_dfs, ignore_index=True) if _dfs else pd.read_excel(str(p))
             matched, skipped = 0, 0
             for _, row in df.iterrows():
                 raw_key = _norm_nome(str(row.get('Equipa', '')))
                 lanc    = float(row.get('Lançamentos_media', 0) or 0)
-                posse   = float(row.get('Posse de bola_media', 0) or 0)
+                _pv = row.get('Posse de bola_media', 0)
+                posse   = 0.0 if (_pv is None or (isinstance(_pv, float) and _pv != _pv)) else float(_pv or 0)
                 # resolver chave canonical
                 canon = _LANC_ALIASES.get(raw_key, raw_key)
                 if canon in _MEDIAS:
@@ -254,6 +260,7 @@ _TSDB_ALIASES = {
     'estrela da amadora':       'estrela',
     'estrela amadora':          'estrela',
     'cf estrela da amadora':    'estrela',
+    'afs':                      'avs',         # Flashscore usa 'Afs' para AVS
     'avs futebol':              'avs',
     'avs futebol sad':          'avs',
     'casa pia ac':              'casa pia',
@@ -1019,8 +1026,14 @@ def _fetch_ninja(flash_mid):
         return {}
 
 def _pred(minuto, total, baseline):
+    """Previsão blendada ritmo+baseline.
+    Usa expoente 1.5 para reduzir o peso do ritmo instantâneo nos primeiros minutos
+    (evita sobreestimação causada por ritmos altos no início do jogo).
+    """
     if minuto <= 0: return baseline
-    return round(min(minuto/90,1.0)*(total/minuto*90) + (1-min(minuto/90,1.0))*baseline, 1)
+    pace_proj = total / minuto * 90
+    pace_w    = min(minuto / 90, 1.0) ** 1.5   # cresce mais devagar que linear
+    return round(pace_w * pace_proj + (1 - pace_w) * baseline, 1)
 
 # ── Statscore live stats ───────────────────────────────────────────────────────
 _STATSCORE_BASE = 'https://events-d.pc.statscore.com/get_pushes/{sid}?messageId=0&auth={auth}&poll=false'
@@ -1271,9 +1284,35 @@ def _fetch_live_bet_lines(bet_ci, tis=None):
 _22BET_LIVE_IDX:    dict  = {}
 _22BET_LIVE_IDX_TS: float = 0.0
 # Liga codes → LIs conhecidos no feed live (adicionados automaticamente ao descobrir)
-_22BET_KNOWN_LIS: list = [118593, 2252762]   # Europa League, Conference League
+_22BET_KNOWN_LIS: list = [3007689, 118593, 2252762]   # PPL, Europa League, Conference League
 # Cache negativo: games onde já falhámos lookup (evitar re-scan frequente)
 _22BET_NO_CI: dict = {}   # {flash_mid: timestamp}
+
+# ── HT snapshot: guarda totais do 1º tempo para corrigir reset do intervalo ──
+_HT_TOTALS: dict = {}   # {flash_mid: {'lanc': int, 'faltas': int}}
+
+def _seed_ht_totals():
+    """No arranque, semeia _HT_TOTALS a partir dos snapshots guardados em DB
+    para jogos que já passaram o intervalo."""
+    if not LIVE_DB_PATH.exists(): return
+    try:
+        con = sqlite3.connect(LIVE_DB_PATH); con.row_factory = sqlite3.Row
+        rows = con.execute('''
+            SELECT flash_mid,
+                   MAX(CASE WHEN minuto_est IN (-1,44,45) THEN lanc_total  END) as lt,
+                   MAX(CASE WHEN minuto_est IN (-1,44,45) THEN faltas_total END) as ft
+            FROM live_snapshots
+            GROUP BY flash_mid
+            HAVING lt IS NOT NULL AND ft IS NOT NULL
+        ''').fetchall()
+        con.close()
+        for r in rows:
+            fmid = r['flash_mid']
+            if fmid not in _HT_TOTALS:
+                _HT_TOTALS[fmid] = {'lanc': r['lt'], 'faltas': r['ft']}
+                logger.info(f'[HT-SEED] {fmid}: L={r["lt"]} F={r["ft"]}')
+    except Exception as e:
+        logger.debug(f'[HT-SEED] erro: {e}')
 
 def _norm_bet(s: str) -> str:
     import unicodedata
@@ -1362,8 +1401,6 @@ _FALT_ALERT_THRESHOLD  = 2.5   # delta mínimo faltas para acionar Telegram
 def collect_live_once():
     """Job APScheduler: recolhe stats de jogos activos a cada 10 min.
     Inclui jogos até 2h antes do kickoff (pré-jogo) para mostrar linhas 22bet antecipadamente."""
-    if not LIVE_DB_PATH.exists():
-        return
     now = datetime.now(timezone.utc)
     con = init_live_db()
     window_start = (now - timedelta(minutes=115)).isoformat()
@@ -1440,6 +1477,23 @@ def collect_live_once():
                     fc,ff = stats.get('faltas_casa'), stats.get('faltas_fora')
             lt = (lc or 0)+(lf or 0) if lc is not None else None
             ft = (fc or 0)+(ff or 0) if fc is not None else None
+
+            # ── HT snapshot: guardar totais no intervalo ──────────────────────
+            if is_ht and lt is not None and ft is not None:
+                if flash_mid not in _HT_TOTALS or _HT_TOTALS[flash_mid]['faltas'] < ft:
+                    _HT_TOTALS[flash_mid] = {'lanc': lt, 'faltas': ft}
+                    logger.info(f'[HT] {flash_mid}: snapshot L={lt} F={ft}')
+
+            # ── HT reset fix: somar 1º tempo ao contador da 2ª parte ──────────
+            if minuto > 45 and flash_mid in _HT_TOTALS:
+                ht = _HT_TOTALS[flash_mid]
+                if lt is not None and lt < ht['lanc']:
+                    logger.debug(f'[HT-FIX] {flash_mid}: lt {lt}+{ht["lanc"]}')
+                    lt += ht['lanc']
+                if ft is not None and ft < ht['faltas']:
+                    logger.debug(f'[HT-FIX] {flash_mid}: ft {ft}+{ht["faltas"]}')
+                    ft += ht['faltas']
+
             le = round(lt/minuto*90,1) if (lt and minuto>0) else None
             fe = round(ft/minuto*90,1) if (ft and minuto>0) else None
 
@@ -1598,10 +1652,7 @@ def auto_load_daily_games():
     today_start = now - 7200     # até 2h atrás (jogo já começou mas app reiniciou)
     today_end   = now + 86400    # próximas 24h
 
-    if not LIVE_DB_PATH.exists():
-        logger.warning('[AUTO] live DB não existe ainda, a aguardar...')
-        return
-
+    # Cria a DB se não existir (após redeploy Railway o ficheiro é apagado)
     con = init_live_db()
     total = 0
 
@@ -3219,8 +3270,10 @@ scheduler.add_job(_fetch_arbitros_auto, 'interval', hours=1, id='arbitros',
                   next_run_time=datetime.now())   # primeiro fetch imediato no arranque
 
 # ── Registar auto-loader diário de jogos ──────────────────────────────────────
-scheduler.add_job(auto_load_daily_games, 'cron', hour=9, minute=0, id='auto_load',
-                  next_run_time=datetime.now())   # corre imediatamente no arranque
+scheduler.add_job(auto_load_daily_games, 'cron', hour='9,13,17,19', minute=0, id='auto_load',
+                  next_run_time=datetime.now())   # corre às 09h, 13h, 17h e 19h UTC + arranque
+
+_seed_ht_totals()   # semeia HT snapshots do DB no arranque (recovery mid-2nd-half)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
