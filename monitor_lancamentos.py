@@ -27,10 +27,12 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_ALERTS_CHAT_ID', '')
 THROW_IN_TI = 55   # TI do mercado Lançamentos Laterais na 22bet
 
 # Ligas a monitorizar — apenas as que têm mercado de lançamentos
+# Para confirmar o ID da La Liga: vai a 22bet → La Liga → inspeciona o URL ou usa --debug
 LEAGUES = {
     'PPL': {'name': '🇵🇹 Primeira Liga',   'league_id': int(os.environ.get('LID_PPL', '3007689'))},
     'PL':  {'name': '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League', 'league_id': int(os.environ.get('LID_PL',  '88637'))},
     'BRA': {'name': '🇧🇷 Brasileirão A',   'league_id': int(os.environ.get('LID_BRA', '1268397'))},
+    'ESP': {'name': '🇪🇸 La Liga',          'league_id': int(os.environ.get('LID_ESP', '127733'))},
 }
 
 # ── 22bet API ─────────────────────────────────────────────────────────────────
@@ -214,7 +216,7 @@ def _get_modelo(liga):
 
 # Compat — carregar_modelo() pré-carrega todos os modelos
 def carregar_modelo():
-    for liga in ('PL', 'PPL', 'BRA'):
+    for liga in ('PL', 'PPL', 'BRA', 'ESP'):
         _get_modelo(liga)
     return _modelos_cache  # devolve dict
 

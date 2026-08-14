@@ -1014,14 +1014,18 @@ def _fetch_ninja(flash_mid):
             except: return None
         _LANC_NAMES  = {'Lançamentos', 'Throw-ins', 'Throw Ins', 'Lanzamientos'}
         _FALT_NAMES  = {'Faltas', 'Fouls', 'Fouls committed', 'Faltas cometidas'}
+        # Ninja devolve 3 blocos: [jogo completo, 1ª parte, 2ª parte]
+        # O PRIMEIRO bloco é o total do jogo — parar após o 1º match de cada stat
         for m in _STAT_RE.finditer(raw):
             name = m.group(1).strip()
-            if name in _LANC_NAMES:
+            if name in _LANC_NAMES and 'lanc_casa' not in stats:
                 stats['lanc_casa'] = pv(m.group(2))
                 stats['lanc_fora'] = pv(m.group(3))
-            elif name in _FALT_NAMES:
+            elif name in _FALT_NAMES and 'faltas_casa' not in stats:
                 stats['faltas_casa'] = pv(m.group(2))
                 stats['faltas_fora'] = pv(m.group(3))
+            if 'lanc_casa' in stats and 'faltas_casa' in stats:
+                break  # já temos o bloco completo
         if stats:
             logger.debug(f'[NINJA] {flash_mid}: {stats}')
         return stats

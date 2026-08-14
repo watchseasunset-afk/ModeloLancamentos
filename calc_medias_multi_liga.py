@@ -40,7 +40,8 @@ def calc_medias_liga(liga):
         df[c] = df[c].apply(parse_stat)
 
     stat_names = sorted(set(c.replace('_casa','').replace('_fora','') for c in stat_cols))
-    teams_list = sorted(df['home'].dropna().unique())
+    # Usar home + away para apanhar equipas que só aparecem num dos lados (bug teams_map)
+    teams_list = sorted(set(df['home'].dropna().tolist() + df['away'].dropna().tolist()))
 
     records_home, records_away, records_overall = [], [], []
     for team in teams_list:
